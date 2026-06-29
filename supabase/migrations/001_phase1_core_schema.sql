@@ -569,6 +569,8 @@ left join lateral (
   limit 1
 ) cc on true;
 
+grant select on v_run_candidate_summary to public;
+
 -- 16.2 v_selected_report_candidates
 create or replace view v_selected_report_candidates as
 select *

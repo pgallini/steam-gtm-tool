@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Steam GTM Candidate Controls</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    input, select, textarea, button { font-size: 14px; margin: 4px 0; width: 100%; }
+    label { display: block; margin-top: 12px; font-weight: bold; }
+    .grid { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { padding: 8px; border: 1px solid #ddd; text-align: left; }
+    th { background: #f5f5f5; }
+    .status { font-size: 12px; color: #555; }
+  </style>
+</head>
+<body>
+  <h1>Candidate Controls</h1>
+
+  <div class="card">
+    <label for="runId">Research Run ID</label>
+    <input id="runId" type="text" value="d9c6c6f6-3a74-46f5-9019-40c0d8af5b8e" />
+    <button id="loadRun">Load Run</button>
+    <p class="status" id="status">Enter a run ID and click Load Run.</p>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Add Candidate Control</h2>
+      <label for="candidateTitle">Title</label>
+      <input id="candidateTitle" />
+      <label for="candidateUrl">Steam App ID or Steam Store URL</label>
+      <input id="candidateUrl" placeholder="e.g. 2288470 or https://store.steampowered.com/app/2288470/" />
+      <label for="controlType">Control Type</label>
+      <select id="controlType">
+        <option value="require_include">require_include</option>
+        <option value="must_consider">must_consider</option>
+        <option value="exclude">exclude</option>
+        <option value="benchmark_only">benchmark_only</option>
+        <option value="watchlist">watchlist</option>
+        <option value="note_only">note_only</option>
+      </select>
+      <label for="candidateReason">Reason</label>
+      <textarea id="candidateReason" rows="3"></textarea>
+      <label for="candidateNotes">User Notes</label>
+      <textarea id="candidateNotes" rows="3"></textarea>
+      <button id="saveControl">Save Control</button>
+    </div>
+
+    <div class="card">
+      <h2>Run Summary</h2>
+      <div id="runSummary"></div>
+    <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+      <button id="refreshControls">Refresh Controls</button>
+      <button id="refreshSummary">Refresh Candidate Summary</button>
+      <button id="generateCandidates" disabled>Generate Run Candidates</button>
+    </div>
+    <p class="status" id="refreshStatus"></p>
+    <p class="status" id="lastGenerated">Last generated: never</p>
+  </div>
+  <div class="card">
+    <h2>Candidate Controls</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>App ID</th>
+          <th>Type</th>
+          <th>Reason / Notes</th>
+        </tr>
+      </thead>
+      <tbody id="controlsTable"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Candidate Summary</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>App ID</th>
+          <th>Control Type</th>
+          <th>Pipeline Status</th>
+          <th>Required</th>
+          <th>Excluded</th>
+          <th>Benchmark</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody id="summaryTable"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const refreshStatusEl = document.getElementById('refreshStatus');
+    const runIdEl = document.getElementById('runId');
+    const controlsTable = document.getElementById('controlsTable');
+    const summaryTable = document.getElementById('summaryTable');
+    const runSummary = document.getElementById('runSummary');
+    const saveButton = document.getElementById('saveControl');
+    const refreshControlsButton = document.getElementById('refreshControls');
+    const refreshSummaryButton = document.getElementById('refreshSummary');
+    const generateCandidatesButton = document.getElementById('generateCandidates');
+
+    let config = null;
+
+    function buildUrl(path, query = '') {
+      return `/api/${path}${query ? `?${query}` : ''}`;
+    }
+
+    function parseSteamUrl(value) {
+      const digits = value.match(/\d+/g);
+      if (!digits) return null;
+      return digits[0];
+    }
+
+    let currentRun = null;
+
+    async function loadRun() {
+      statusEl.textContent = 'Loading run...';
+      const runId = runIdEl.value.trim();
+      if (!runId) {
+        statusEl.textContent = 'Run ID is required.';
+        return;
+      }
+
+      try {
+        const runResp = await fetch(buildUrl('research_runs', `id=${encodeURIComponent(runId)}`));
+        const runs = await runResp.json();
+        if (!Array.isArray(runs) || runs.length === 0) {
+          statusEl.textContent = 'Research run not found.';
+          return;
+        }
+
+        currentRun = runs[0];
+        runSummary.innerHTML = `
+          <p><strong>Name:</strong> ${currentRun.name || '(unnamed)'}</p>
+          <p><strong>Status:</strong> ${currentRun.status}</p>
+          <p><strong>Stage:</strong> ${currentRun.current_stage}</p>
+          <pre>${JSON.stringify(currentRun.run_config, null, 2)}</pre>
+        `;
+        await loadControls(runId);
+        await loadCandidateSummary(runId);
+        // enable generate button now that a run is loaded
+        if (generateCandidatesButton) generateCandidatesButton.disabled = false;
+        statusEl.textContent = 'Loaded run successfully.';
+      } catch (error) {
+        statusEl.textContent = `Error loading run: ${error.message}`;
+      }
+    }
+
+    async function loadControls(runId) {
+      const resp = await fetch(buildUrl('run_candidate_controls', `run_id=${encodeURIComponent(runId)}`));
+      const controls = await resp.json();
+      controlsTable.innerHTML = controls.map(control => `
+        <tr>
+          <td>${control.title || ''}</td>
+          <td>${control.steam_appid || ''}</td>
+          <td>${control.control_type}</td>
+          <td>${[control.reason, control.user_notes].filter(Boolean).join(' / ')}</td>
+        </tr>
+      `).join('');
+    }
+
+    async function loadCandidateSummary(runId) {
+      const resp = await fetch(buildUrl('v_run_candidate_summary', `run_id=${encodeURIComponent(runId)}`));
+      if (!resp.ok) {
+        const text = await resp.text();
+        refreshStatusEl.textContent = `Summary load failed: ${text || resp.statusText}`;
+        return;
+      }
+      const summary = await resp.json();
+      summaryTable.innerHTML = summary.map(item => `
+        <tr>
+          <td>${item.title || ''}</td>
+          <td>${item.steam_appid || ''}</td>
+          <td>${item.user_control_type || ''}</td>
+          <td>${item.pipeline_status || ''}</td>
+          <td>${item.is_user_required ? 'yes' : 'no'}</td>
+          <td>${item.is_user_excluded ? 'yes' : 'no'}</td>
+          <td>${item.is_benchmark_only ? 'yes' : 'no'}</td>
+          <td>${item.reasoning || ''}</td>
+        </tr>
+      `).join('');
+    }
+
+    async function saveControl() {
+      const runId = runIdEl.value.trim();
+      if (!runId) {
+        statusEl.textContent = 'Run ID is required to save a control.';
+        return;
+      }
+
+      const title = document.getElementById('candidateTitle').value.trim();
+      const url = document.getElementById('candidateUrl').value.trim();
+      const controlType = document.getElementById('controlType').value;
+      const reason = document.getElementById('candidateReason').value.trim();
+      const notes = document.getElementById('candidateNotes').value.trim();
+
+      if (!title && !url) {
+        statusEl.textContent = 'A title or Steam URL/App ID is required.';
+        return;
+      }
+
+      if (!currentRun) {
+        statusEl.textContent = 'Load a run before saving a candidate control.';
+        return;
+      }
+
+      const body = {
+        run_id: runId,
+        organization_id: currentRun.organization_id,
+        control_type: controlType,
+        title,
+        user_notes: notes,
+        reason,
+        raw_input_json: { title, url, controlType, reason, notes },
+      };
+
+      if (url) {
+        const appid = parseSteamUrl(url);
+        if (appid) {
+          body.steam_appid = Number(appid);
+          body.steam_url = `https://store.steampowered.com/app/${appid}/`;
+        } else {
+          body.steam_url = url;
+        }
+      }
+
+      const resp = await fetch(buildUrl('run_candidate_controls', ''), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Prefer: 'return=representation',
+        },
+        body: JSON.stringify(body),
+      });
+
+      let result = null;
+      const text = await resp.text();
+      if (text) {
+        try {
+          result = JSON.parse(text);
+        } catch (error) {
+          result = text;
+        }
+      }
+
+      if (resp.status >= 400) {
+        statusEl.textContent = `Failed to save control: ${JSON.stringify(result)}`;
+        return;
+      }
+
+      const savedControl = Array.isArray(result) ? result[0] : result;
+      statusEl.textContent = `Candidate control saved${savedControl && savedControl.id ? ` (ID ${savedControl.id})` : ''}.`;
+      await loadControls(runId);
+      await loadCandidateSummary(runId);
+    }
+
+    refreshControlsButton.addEventListener('click', async () => {
+      refreshStatusEl.textContent = 'Refreshing controls...';
+      await loadControls(runIdEl.value.trim());
+      refreshStatusEl.textContent = 'Controls refreshed.';
+    });
+
+    async function generateRunCandidates() {
+      const runId = runIdEl.value.trim();
+      if (!runId) {
+        statusEl.textContent = 'Run ID is required to generate run candidates.';
+        return;
+      }
+      if (!currentRun) {
+        statusEl.textContent = 'Load a run before generating candidates.';
+        return;
+      }
+
+      generateCandidatesButton.disabled = true;
+      statusEl.textContent = 'Generating run candidates...';
+      try {
+        const resp = await fetch(buildUrl('prepare_run_candidates'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ run_id: runId }),
+        });
+        const result = await resp.json().catch(() => null);
+        if (!resp.ok) {
+          throw new Error(result?.error || resp.statusText || 'Unknown error');
+        }
+        statusEl.textContent = `Generate complete: ${result.count ?? 0} candidates (${result.status}).`;
+        // update last generated timestamp
+        const lastEl = document.getElementById('lastGenerated');
+        if (lastEl) lastEl.textContent = `Last generated: ${new Date().toLocaleString()}`;
+        await loadControls(runId);
+        await loadCandidateSummary(runId);
+      } catch (error) {
+        statusEl.textContent = `Generate failed: ${error.message}`;
+      } finally {
+        generateCandidatesButton.disabled = false;
+      }
+    }
+
+    refreshSummaryButton.addEventListener('click', async () => {
+      refreshStatusEl.textContent = 'Refreshing candidate summary...';
+      await loadCandidateSummary(runIdEl.value.trim());
+      refreshStatusEl.textContent = 'Candidate summary refreshed.';
+    });
+
+    document.getElementById('loadRun').addEventListener('click', loadRun);
+    saveButton.addEventListener('click', saveControl);
+    generateCandidatesButton.addEventListener('click', generateRunCandidates);
+  </script>
+</body>
+</html>
