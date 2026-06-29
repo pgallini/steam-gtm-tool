@@ -14,15 +14,41 @@
     th, td { padding: 8px; border: 1px solid #ddd; text-align: left; }
     th { background: #f5f5f5; }
     .status { font-size: 12px; color: #555; }
+    pre.report { white-space: pre-wrap; max-height: 360px; overflow: auto; background: #fafafa; padding: 12px; border: 1px solid #eee; }
   </style>
 </head>
 <body>
   <h1>Candidate Controls</h1>
 
   <div class="card">
-    <label for="runId">Research Run ID</label>
+    <h2>Research Run</h2>
+    <label for="runId">Run ID</label>
     <input id="runId" type="text" value="d9c6c6f6-3a74-46f5-9019-40c0d8af5b8e" />
-    <button id="loadRun">Load Run</button>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">
+      <button id="btnLoadRun">Load Run</button>
+      <button id="btnListRuns">List Runs</button>
+      <button id="btnRefreshRuns">Refresh Runs</button>
+    </div>
+    <label for="runSelect">Select existing run</label>
+    <select id="runSelect">
+      <option value="">Choose a run</option>
+    </select>
+    <p class="status" id="selectedRun">Selected run: none</p>
+    <label for="organizationIdForList">Organization</label>
+    <select id="organizationIdForList">
+      <option value="">Choose an organization</option>
+      <option value="d76f2b86-7d52-40f7-9e2f-9f59f9d88d6c">Default Org</option>
+    </select>
+
+    <div style="margin-top: 16px; border-top: 1px solid #eee; padding-top: 16px;">
+      <h3>Create New Run</h3>
+      <label for="newRunGameId">Game UUID</label>
+      <input id="newRunGameId" placeholder="existing game UUID" />
+      <label for="newRunName">Run Name</label>
+      <input id="newRunName" placeholder="optional run name" />
+      <button id="btnCreateRun">Create Run</button>
+    </div>
+
     <p class="status" id="status">Enter a run ID and click Load Run.</p>
   </div>
 
@@ -46,16 +72,19 @@
       <textarea id="candidateReason" rows="3"></textarea>
       <label for="candidateNotes">User Notes</label>
       <textarea id="candidateNotes" rows="3"></textarea>
-      <button id="saveControl">Save Control</button>
+      <button id="btnSaveControl" disabled>Save Control</button>
+      <button id="btnCancelEdit" disabled>Cancel Edit</button>
     </div>
 
     <div class="card">
       <h2>Run Summary</h2>
       <div id="runSummary"></div>
     <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
-      <button id="refreshControls">Refresh Controls</button>
-      <button id="refreshSummary">Refresh Candidate Summary</button>
-      <button id="generateCandidates" disabled>Generate Run Candidates</button>
+      <button id="btnRefreshControls" disabled>Refresh Controls</button>
+      <button id="btnRefreshSummary" disabled>Refresh Candidate Summary</button>
+      <button id="btnGenerateCandidates" disabled>Generate Run Candidates</button>
+      <button id="btnRunPipeline" disabled>Run Full Pipeline</button>
+      <button id="btnRefreshReports" disabled>Refresh Reports</button>
     </div>
     <p class="status" id="refreshStatus"></p>
     <p class="status" id="lastGenerated">Last generated: never</p>
@@ -88,25 +117,57 @@
           <th>Excluded</th>
           <th>Benchmark</th>
           <th>Notes</th>
+      <th>Actions</th>
         </tr>
       </thead>
       <tbody id="summaryTable"></tbody>
     </table>
   </div>
 
+  <div class="card">
+    <h2>Generated Reports</h2>
+    <div id="reportsList">No reports loaded.</div>
+  </div>
+
   <script>
     const statusEl = document.getElementById('status');
     const refreshStatusEl = document.getElementById('refreshStatus');
     const runIdEl = document.getElementById('runId');
+    const runSelect = document.getElementById('runSelect');
+    const organizationIdForListEl = document.getElementById('organizationIdForList');
+    const newRunGameIdEl = document.getElementById('newRunGameId');
+    const newRunNameEl = document.getElementById('newRunName');
     const controlsTable = document.getElementById('controlsTable');
     const summaryTable = document.getElementById('summaryTable');
     const runSummary = document.getElementById('runSummary');
-    const saveButton = document.getElementById('saveControl');
-    const refreshControlsButton = document.getElementById('refreshControls');
-    const refreshSummaryButton = document.getElementById('refreshSummary');
-    const generateCandidatesButton = document.getElementById('generateCandidates');
+    const selectedRunEl = document.getElementById('selectedRun');
+    const saveButton = document.getElementById('btnSaveControl');
+    const cancelEditButton = document.getElementById('btnCancelEdit');
+    const refreshControlsButton = document.getElementById('btnRefreshControls');
+    const refreshSummaryButton = document.getElementById('btnRefreshSummary');
+    const listRunsButton = document.getElementById('btnListRuns');
+    const refreshRunsButton = document.getElementById('btnRefreshRuns');
+    const createRunButton = document.getElementById('btnCreateRun');
+    const generateCandidatesButton = document.getElementById('btnGenerateCandidates');
+    const runPipelineButton = document.getElementById('btnRunPipeline');
+    const refreshReportsButton = document.getElementById('btnRefreshReports');
+    const reportsList = document.getElementById('reportsList');
 
     let config = null;
+    let editingControlId = null;
+    const controlsById = new Map();
+
+    function setRunLoadedState(isLoaded) {
+      saveButton.disabled = !isLoaded;
+      generateCandidatesButton.disabled = !isLoaded;
+      runPipelineButton.disabled = !isLoaded;
+      refreshControlsButton.disabled = !isLoaded;
+      refreshSummaryButton.disabled = !isLoaded;
+      refreshReportsButton.disabled = !isLoaded;
+    }
+
+    setRunLoadedState(false);
+    setEditState(false);
 
     function buildUrl(path, query = '') {
       return `/api/${path}${query ? `?${query}` : ''}`;
@@ -122,6 +183,7 @@
 
     async function loadRun() {
       statusEl.textContent = 'Loading run...';
+      generateCandidatesButton.disabled = true;
       const runId = runIdEl.value.trim();
       if (!runId) {
         statusEl.textContent = 'Run ID is required.';
@@ -132,11 +194,30 @@
         const runResp = await fetch(buildUrl('research_runs', `id=${encodeURIComponent(runId)}`));
         const runs = await runResp.json();
         if (!Array.isArray(runs) || runs.length === 0) {
+          currentRun = null;
+        setRunLoadedState(false);
+        if (selectedRunEl) {
+          selectedRunEl.textContent = 'Selected run: none';
+        }
+          controlsTable.innerHTML = '';
+          summaryTable.innerHTML = '';
+          reportsList.innerHTML = 'No reports loaded.';
           statusEl.textContent = 'Research run not found.';
           return;
         }
 
         currentRun = runs[0];
+        if (runSelect) {
+          const optionExists = Array.from(runSelect.options).some(opt => opt.value === runId);
+          if (!optionExists) {
+            runSelect.insertAdjacentHTML('beforeend', `<option value="${runId}">${currentRun.name || runId}</option>`);
+          }
+          runSelect.value = runId;
+        }
+        setRunLoadedState(true);
+        if (selectedRunEl) {
+          selectedRunEl.textContent = `Selected run: ${currentRun.name || currentRun.id}`;
+        }
         runSummary.innerHTML = `
           <p><strong>Name:</strong> ${currentRun.name || '(unnamed)'}</p>
           <p><strong>Status:</strong> ${currentRun.status}</p>
@@ -145,10 +226,15 @@
         `;
         await loadControls(runId);
         await loadCandidateSummary(runId);
-        // enable generate button now that a run is loaded
+        await loadReports(runId);
         if (generateCandidatesButton) generateCandidatesButton.disabled = false;
         statusEl.textContent = 'Loaded run successfully.';
       } catch (error) {
+        currentRun = null;
+        setRunLoadedState(false);
+        if (selectedRunEl) {
+          selectedRunEl.textContent = 'Selected run: none';
+        }
         statusEl.textContent = `Error loading run: ${error.message}`;
       }
     }
@@ -156,14 +242,25 @@
     async function loadControls(runId) {
       const resp = await fetch(buildUrl('run_candidate_controls', `run_id=${encodeURIComponent(runId)}`));
       const controls = await resp.json();
+      if (!Array.isArray(controls) || controls.length === 0) {
+        controlsTable.innerHTML = '<tr><td colspan="5">No candidate controls found.</td></tr>';
+        controlsById.clear();
+        return;
+      }
       controlsTable.innerHTML = controls.map(control => `
         <tr>
           <td>${control.title || ''}</td>
           <td>${control.steam_appid || ''}</td>
           <td>${control.control_type}</td>
           <td>${[control.reason, control.user_notes].filter(Boolean).join(' / ')}</td>
+          <td>
+            <button class="edit-control" data-id="${control.id}">Edit</button>
+            <button class="delete-control" data-id="${control.id}">Delete</button>
+          </td>
         </tr>
       `).join('');
+      controlsById.clear();
+      controls.forEach(control => controlsById.set(control.id, control));
     }
 
     async function loadCandidateSummary(runId) {
@@ -174,6 +271,10 @@
         return;
       }
       const summary = await resp.json();
+      if (!Array.isArray(summary) || summary.length === 0) {
+        summaryTable.innerHTML = '<tr><td colspan="8">No candidate summary rows found.</td></tr>';
+        return;
+      }
       summaryTable.innerHTML = summary.map(item => `
         <tr>
           <td>${item.title || ''}</td>
@@ -185,6 +286,36 @@
           <td>${item.is_benchmark_only ? 'yes' : 'no'}</td>
           <td>${item.reasoning || ''}</td>
         </tr>
+      `).join('');
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    async function loadReports(runId) {
+      const resp = await fetch(buildUrl('reports', `run_id=${encodeURIComponent(runId)}`));
+      if (!resp.ok) {
+        const text = await resp.text();
+        reportsList.innerHTML = `<p class="status">Report load failed: ${escapeHtml(text || resp.statusText)}</p>`;
+        return;
+      }
+      const reports = await resp.json();
+      if (!Array.isArray(reports) || reports.length === 0) {
+        reportsList.innerHTML = '<p class="status">No reports generated yet.</p>';
+        return;
+      }
+      reportsList.innerHTML = reports.map(report => `
+        <details style="margin: 8px 0;">
+          <summary><strong>${escapeHtml(report.report_type)}</strong> — ${escapeHtml(report.title)} (${escapeHtml(report.created_at)})</summary>
+          <p class="status">Generated by ${escapeHtml(report.generated_by)} / template ${escapeHtml(report.template_version)}</p>
+          <pre class="report">${escapeHtml(report.content_md)}</pre>
+        </details>
       `).join('');
     }
 
@@ -231,35 +362,197 @@
         }
       }
 
-      const resp = await fetch(buildUrl('run_candidate_controls', ''), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Prefer: 'return=representation',
-        },
-        body: JSON.stringify(body),
-      });
-
-      let result = null;
-      const text = await resp.text();
-      if (text) {
-        try {
-          result = JSON.parse(text);
-        } catch (error) {
-          result = text;
-        }
+      const method = editingControlId ? 'PATCH' : 'POST';
+      if (editingControlId) {
+        body.id = editingControlId;
+        statusEl.textContent = 'Updating candidate control...';
+      } else {
+        statusEl.textContent = 'Saving candidate control...';
       }
 
-      if (resp.status >= 400) {
-        statusEl.textContent = `Failed to save control: ${JSON.stringify(result)}`;
+      saveButton.disabled = true;
+      try {
+        const resp = await fetch(buildUrl('run_candidate_controls', ''), {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+            Prefer: 'return=representation',
+          },
+          body: JSON.stringify(body),
+        });
+
+        let result = null;
+        const text = await resp.text();
+        if (text) {
+          try {
+            result = JSON.parse(text);
+          } catch (error) {
+            result = text;
+          }
+        }
+
+        if (resp.status >= 400) {
+          statusEl.textContent = `Failed to save control: ${JSON.stringify(result)}`;
+          return;
+        }
+
+        const savedControl = Array.isArray(result) ? result[0] : result;
+        statusEl.textContent = editingControlId
+          ? `Candidate control updated${savedControl && savedControl.id ? ` (ID ${savedControl.id})` : ''}.`
+          : `Candidate control saved${savedControl && savedControl.id ? ` (ID ${savedControl.id})` : ''}.`;
+        resetControlForm();
+        await loadControls(runId);
+        await loadCandidateSummary(runId);
+        await loadReports(runId);
+      } finally {
+        saveButton.disabled = false;
+      }
+    }
+
+    function enterEditMode(controlId) {
+      const control = controlsById.get(controlId);
+      if (!control) {
+        statusEl.textContent = 'Control not found for editing.';
         return;
       }
-
-      const savedControl = Array.isArray(result) ? result[0] : result;
-      statusEl.textContent = `Candidate control saved${savedControl && savedControl.id ? ` (ID ${savedControl.id})` : ''}.`;
-      await loadControls(runId);
-      await loadCandidateSummary(runId);
+      editingControlId = controlId;
+      document.getElementById('candidateTitle').value = control.title || '';
+      document.getElementById('candidateUrl').value = control.steam_url || (control.steam_appid ? String(control.steam_appid) : '') || '';
+      document.getElementById('controlType').value = control.control_type || 'require_include';
+      document.getElementById('candidateReason').value = control.reason || '';
+      document.getElementById('candidateNotes').value = control.user_notes || '';
+      setEditState(true);
+      statusEl.textContent = `Editing control ${controlId}`;
     }
+
+    async function deleteControl(controlId) {
+      if (!window.confirm('Delete this candidate control?')) {
+        return;
+      }
+      const runId = runIdEl.value.trim();
+      statusEl.textContent = 'Deleting control...';
+      try {
+        const resp = await fetch(buildUrl('run_candidate_controls', `id=${encodeURIComponent(controlId)}`), {
+          method: 'DELETE',
+        });
+        const result = await resp.json().catch(() => null);
+        if (!resp.ok) {
+          throw new Error(result?.error || resp.statusText || 'Delete failed');
+        }
+        statusEl.textContent = `Control deleted (${controlId}).`;
+        if (editingControlId === controlId) {
+          resetControlForm();
+        }
+        await loadControls(runId);
+        await loadCandidateSummary(runId);
+      } catch (error) {
+        statusEl.textContent = `Delete failed: ${error.message}`;
+      }
+    }
+
+    function resetControlForm() {
+      editingControlId = null;
+      document.getElementById('candidateTitle').value = '';
+      document.getElementById('candidateUrl').value = '';
+      document.getElementById('controlType').value = 'require_include';
+      document.getElementById('candidateReason').value = '';
+      document.getElementById('candidateNotes').value = '';
+      setEditState(false);
+    }
+
+    function setEditState(isEditing) {
+      cancelEditButton.disabled = !isEditing;
+      saveButton.textContent = isEditing ? 'Update Control' : 'Save Control';
+    }
+
+    async function listRuns() {
+      const organizationId = organizationIdForListEl.value.trim();
+      if (!organizationId) {
+        statusEl.textContent = 'Organization ID is required to list runs.';
+        return;
+      }
+      statusEl.textContent = 'Listing runs...';
+      const resp = await fetch(buildUrl('research_runs', `organization_id=${encodeURIComponent(organizationId)}`));
+      if (!resp.ok) {
+        const text = await resp.text();
+        statusEl.textContent = `Failed to list runs: ${text || resp.statusText}`;
+        return;
+      }
+      const runs = await resp.json();
+      runSelect.innerHTML = ['<option value="">Choose a run</option>', ...runs.map(run => `<option value="${run.id}">${run.name || run.id} (${run.current_stage || run.status || 'unknown'})</option>`)].join('');
+      statusEl.textContent = `Found ${runs.length} runs.`;
+      if (selectedRunEl) {
+        selectedRunEl.textContent = 'Selected run: none';
+      }
+      currentRun = null;
+      setRunLoadedState(false);
+    }
+
+    async function createRun() {
+      const gameId = newRunGameIdEl.value.trim();
+      const organizationId = organizationIdForListEl.value.trim();
+      const name = newRunNameEl.value.trim();
+      if (!gameId || !organizationId) {
+        statusEl.textContent = 'Game ID and Organization are required to create a run.';
+        return;
+      }
+      statusEl.textContent = 'Creating run...';
+      createRunButton.disabled = true;
+      try {
+        const resp = await fetch(buildUrl('research_runs'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ game_id: gameId, organization_id: organizationId, name }),
+        });
+        const text = await resp.text();
+        if (!resp.ok) {
+          statusEl.textContent = `Run creation failed: ${text || resp.statusText}`;
+          return;
+        }
+        let run = null;
+        try {
+          run = JSON.parse(text);
+        } catch {
+          statusEl.textContent = 'Run creation response could not be parsed.';
+          return;
+        }
+        if (Array.isArray(run)) {
+          run = run[0];
+        }
+        if (!run || !run.id) {
+          statusEl.textContent = `Run creation returned unexpected result: ${text}`;
+          return;
+        }
+        runIdEl.value = run.id;
+        organizationIdForListEl.value = run.organization_id || organizationId;
+        if (runSelect) {
+          const optionExists = Array.from(runSelect.options).some(opt => opt.value === run.id);
+          if (!optionExists) {
+            runSelect.insertAdjacentHTML('beforeend', `<option value="${run.id}">${run.name || run.id}</option>`);
+          }
+          runSelect.value = run.id;
+        }
+        statusEl.textContent = `Created run ${run.id}. Loading...`;
+        await loadRun();
+      } finally {
+        createRunButton.disabled = false;
+      }
+    }
+
+    runSelect.addEventListener('change', async () => {
+      const selectedId = runSelect.value;
+      if (selectedId) {
+        runIdEl.value = selectedId;
+        await loadRun();
+      }
+    });
+
+    organizationIdForListEl.addEventListener('change', async () => {
+      const organizationId = organizationIdForListEl.value.trim();
+      if (organizationId) {
+        await listRuns();
+      }
+    });
 
     refreshControlsButton.addEventListener('click', async () => {
       refreshStatusEl.textContent = 'Refreshing controls...';
@@ -291,7 +584,6 @@
           throw new Error(result?.error || resp.statusText || 'Unknown error');
         }
         statusEl.textContent = `Generate complete: ${result.count ?? 0} candidates (${result.status}).`;
-        // update last generated timestamp
         const lastEl = document.getElementById('lastGenerated');
         if (lastEl) lastEl.textContent = `Last generated: ${new Date().toLocaleString()}`;
         await loadControls(runId);
@@ -303,15 +595,76 @@
       }
     }
 
+    async function runFullPipeline() {
+      const runId = runIdEl.value.trim();
+      if (!runId) {
+        statusEl.textContent = 'Run ID is required to run the pipeline.';
+        return;
+      }
+      if (!currentRun) {
+        statusEl.textContent = 'Load a run before running the pipeline.';
+        return;
+      }
+
+      runPipelineButton.disabled = true;
+      generateCandidatesButton.disabled = true;
+      statusEl.textContent = 'Running full pipeline. This may take a few minutes...';
+      try {
+        const resp = await fetch(buildUrl('run_research_pipeline'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ run_id: runId }),
+        });
+        const result = await resp.json().catch(() => null);
+        if (!resp.ok) {
+          throw new Error(result?.error || resp.statusText || 'Unknown error');
+        }
+        statusEl.textContent = `Pipeline complete: ${JSON.stringify(result)}`;
+        const lastEl = document.getElementById('lastGenerated');
+        if (lastEl) lastEl.textContent = `Last pipeline run: ${new Date().toLocaleString()}`;
+        await loadRun();
+      } catch (error) {
+        statusEl.textContent = `Pipeline failed: ${error.message}`;
+      } finally {
+        runPipelineButton.disabled = false;
+        generateCandidatesButton.disabled = false;
+      }
+    }
+
     refreshSummaryButton.addEventListener('click', async () => {
       refreshStatusEl.textContent = 'Refreshing candidate summary...';
       await loadCandidateSummary(runIdEl.value.trim());
       refreshStatusEl.textContent = 'Candidate summary refreshed.';
     });
 
-    document.getElementById('loadRun').addEventListener('click', loadRun);
+    refreshReportsButton.addEventListener('click', async () => {
+      refreshStatusEl.textContent = 'Refreshing reports...';
+      await loadReports(runIdEl.value.trim());
+      refreshStatusEl.textContent = 'Reports refreshed.';
+    });
+
+    document.getElementById('btnLoadRun').addEventListener('click', loadRun);
+    listRunsButton.addEventListener('click', listRuns);
+    refreshRunsButton.addEventListener('click', listRuns);
+    createRunButton.addEventListener('click', createRun);
     saveButton.addEventListener('click', saveControl);
+    cancelEditButton.addEventListener('click', () => {
+      resetControlForm();
+      statusEl.textContent = 'Edit canceled.';
+    });
     generateCandidatesButton.addEventListener('click', generateRunCandidates);
+    runPipelineButton.addEventListener('click', runFullPipeline);
+    controlsTable.addEventListener('click', async (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const controlId = target.dataset.id;
+      if (!controlId) return;
+      if (target.classList.contains('edit-control')) {
+        enterEditMode(controlId);
+      } else if (target.classList.contains('delete-control')) {
+        await deleteControl(controlId);
+      }
+    });
   </script>
 </body>
 </html>

@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import requests
 from dotenv import load_dotenv
-from supabase.research_run_service import prepareRunCandidates
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from supabase.research_run_service import prepareRunCandidates, updateCandidateControl, deleteCandidateControl
+from supabase.research_pipeline import runResearchPipeline
 
 load_dotenv(dotenv_path=Path('.env'))
 
@@ -70,10 +74,15 @@ class CandidateUIHandler(SimpleHTTPRequestHandler):
         query = parse_qs(parsed.query)
         if api_path == 'research_runs':
             run_id = query.get('run_id', query.get('id', ['']))[0]
-            if not run_id:
-                self.send_error(400, 'Missing run_id or id query parameter')
+            if run_id:
+                response = proxy_request('GET', 'research_runs', {'select': '*', 'id': f'eq.{run_id}'})
+                self.respond_proxy(response)
                 return
-            response = proxy_request('GET', 'research_runs', {'select': '*', 'id': f'eq.{run_id}'})
+            organization_id = query.get('organization_id', [''])[0]
+            if not organization_id:
+                self.send_error(400, 'Missing run_id, id, or organization_id query parameter')
+                return
+            response = proxy_request('GET', 'research_runs', {'select': '*', 'organization_id': f'eq.{organization_id}', 'order': 'created_at.desc'})
             self.respond_proxy(response)
             return
         if api_path == 'run_candidate_controls':
@@ -90,6 +99,14 @@ class CandidateUIHandler(SimpleHTTPRequestHandler):
                 self.send_error(400, 'Missing run_id query parameter')
                 return
             response = proxy_request('GET', 'v_run_candidate_summary', {'select': '*', 'run_id': f'eq.{run_id}', 'order': 'created_at.desc'})
+            self.respond_proxy(response)
+            return
+        if api_path == 'reports':
+            run_id = query.get('run_id', [''])[0]
+            if not run_id:
+                self.send_error(400, 'Missing run_id query parameter')
+                return
+            response = proxy_request('GET', 'reports', {'select': 'id,run_id,report_type,title,content_md,generated_by,template_version,created_at', 'run_id': f'eq.{run_id}', 'order': 'created_at.desc'})
             self.respond_proxy(response)
             return
         self.send_error(404, 'Unknown API path')
@@ -119,10 +136,53 @@ class CandidateUIHandler(SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({'error': str(exc)}).encode('utf-8'))
             return
-        if parsed.path == '/api/run_candidate_controls':
+        if parsed.path == '/api/run_research_pipeline':
             length = int(self.headers.get('Content-Length', 0))
-            body = self.rfile.read(length).decode('utf-8')
-            payload = json.loads(body)
+            payload = json.loads(self.rfile.read(length).decode('utf-8'))
+            run_id = payload.get('run_id')
+            if not run_id:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Missing run_id'}).encode('utf-8'))
+                return
+            try:
+                result = runResearchPipeline(run_id)
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(result).encode('utf-8'))
+            except Exception as exc:
+                print(f'Run research pipeline error: {exc}')
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(exc)}).encode('utf-8'))
+            return
+        if parsed.path == '/api/research_runs':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                payload = json.loads(self.rfile.read(length).decode('utf-8'))
+            except json.JSONDecodeError:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Invalid JSON body'}).encode('utf-8'))
+                return
+            response = proxy_request('POST', 'research_runs', json_body=payload, extra_headers={'Prefer': 'return=representation'})
+            self.respond_proxy(response)
+            return
+        if parsed.path == '/api/run_candidate_controls':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = self.rfile.read(length).decode('utf-8')
+                payload = json.loads(body)
+            except json.JSONDecodeError:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Invalid JSON body'}).encode('utf-8'))
+                return
             steam_appid = payload.get('steam_appid')
             if steam_appid is not None:
                 steam_app_response = ensure_steam_app(int(steam_appid), payload.get('title'))
@@ -135,7 +195,68 @@ class CandidateUIHandler(SimpleHTTPRequestHandler):
             response = proxy_request('POST', 'run_candidate_controls', json_body=payload)
             self.respond_proxy(response)
             return
-        super().do_POST()
+        self.send_error(404, 'Unknown API path')
+
+    def do_PATCH(self):
+        parsed = urlparse(self.path)
+        if parsed.path == '/api/run_candidate_controls':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                payload = json.loads(self.rfile.read(length).decode('utf-8'))
+            except json.JSONDecodeError:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Invalid JSON body'}).encode('utf-8'))
+                return
+            control_id = payload.get('id')
+            updates = payload.get('updates') or {k: v for k, v in payload.items() if k != 'id'}
+            if not control_id or not updates:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Missing control id or update fields'}).encode('utf-8'))
+                return
+            try:
+                updated = updateCandidateControl(control_id, updates)
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(updated).encode('utf-8'))
+            except Exception as exc:
+                print(f'Update run candidate control error: {exc}')
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(exc)}).encode('utf-8'))
+            return
+        self.send_error(404, 'Unknown API path')
+
+    def do_DELETE(self):
+        parsed = urlparse(self.path)
+        if parsed.path == '/api/run_candidate_controls':
+            query = parse_qs(parsed.query)
+            control_id = query.get('id', [''])[0]
+            if not control_id:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Missing control id query parameter'}).encode('utf-8'))
+                return
+            try:
+                result = deleteCandidateControl(control_id)
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(result).encode('utf-8'))
+            except Exception as exc:
+                print(f'Delete run candidate control error: {exc}')
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(exc)}).encode('utf-8'))
+            return
+        self.send_error(404, 'Unknown API path')
 
     def respond_proxy(self, response: requests.Response):
         if response.status_code >= 400:
