@@ -3,668 +3,1122 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Steam GTM Candidate Controls</title>
+  <title>Steam GTM Research</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 24px; }
-    input, select, textarea, button { font-size: 14px; margin: 4px 0; width: 100%; }
-    label { display: block; margin-top: 12px; font-weight: bold; }
-    .grid { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; }
-    .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-    th, td { padding: 8px; border: 1px solid #ddd; text-align: left; }
-    th { background: #f5f5f5; }
-    .status { font-size: 12px; color: #555; }
-    pre.report { white-space: pre-wrap; max-height: 360px; overflow: auto; background: #fafafa; padding: 12px; border: 1px solid #eee; }
+    :root {
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --border: #d9deea;
+      --muted: #667085;
+      --text: #182230;
+      --primary: #3157d5;
+      --primary-dark: #2442a6;
+      --success: #067647;
+      --danger: #b42318;
+      --warn: #b54708;
+      --soft: #eef4ff;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, sans-serif; color: var(--text); background: var(--bg); }
+    header { background: var(--card); border-bottom: 1px solid var(--border); padding: 22px 28px; display: flex; gap: 18px; justify-content: space-between; align-items: flex-start; }
+    h1, h2, h3 { margin: 0 0 8px; }
+    p { margin: 6px 0; }
+    main { padding: 24px 28px 60px; max-width: 1600px; margin: 0 auto; }
+    label { display: block; margin-top: 12px; font-weight: 700; font-size: 13px; }
+    input, select, textarea, button { font: inherit; }
+    input, select, textarea { width: 100%; margin-top: 5px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+    textarea { resize: vertical; }
+    button { border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; background: #fff; cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: 0.55; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; background: #fff; }
+    th, td { padding: 9px 10px; border-bottom: 1px solid #edf0f6; text-align: left; vertical-align: top; font-size: 13px; }
+    th { background: #f8f9fc; color: #344054; font-weight: 700; position: sticky; top: 0; z-index: 1; }
+    .subhead { color: var(--muted); max-width: 760px; }
+    .workspace-select { min-width: 230px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+    .grid { display: grid; gap: 16px; }
+    .two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .three-col { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .dashboard-actions { margin: 22px 0 18px; }
+    .action-card { padding: 22px; border: 1px solid var(--border); border-radius: 14px; background: #fff; }
+    .action-card p { color: var(--muted); min-height: 42px; }
+    .primary { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 700; }
+    .primary:hover { background: var(--primary-dark); }
+    .secondary { background: #fff; color: var(--text); }
+    .linkish { border: 0; background: transparent; color: var(--primary); padding: 0; }
+    .status { font-size: 13px; color: var(--muted); }
+    .status.ok { color: var(--success); }
+    .status.error, .error-box { color: var(--danger); }
+    .error-box { border: 1px solid #fecdca; background: #fffbfa; padding: 12px; border-radius: 10px; margin-top: 10px; }
+    .mode { display: none; }
+    .mode.active { display: block; }
+    .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .toolbar > * { width: auto; }
+    .pill { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border); border-radius: 999px; padding: 4px 8px; font-size: 12px; background: #fff; white-space: nowrap; }
+    .pill.completed { border-color: #abefc6; background: #ecfdf3; color: #067647; }
+    .pill.running { border-color: #fedf89; background: #fffaeb; color: #b54708; }
+    .pill.failed { border-color: #fecdca; background: #fffbfa; color: #b42318; }
+    .stepper { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+    .step { border: 1px solid var(--border); border-radius: 10px; padding: 10px; background: #fff; }
+    .step strong { display: block; font-size: 13px; }
+    .step span { color: var(--muted); font-size: 12px; }
+    .step.completed { background: #ecfdf3; border-color: #abefc6; }
+    .step.running { background: #fffaeb; border-color: #fedf89; }
+    .step.failed { background: #fffbfa; border-color: #fecdca; }
+    .loaded-run { margin-bottom: 16px; }
+    .metric-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+    .metric { border: 1px solid #edf0f6; border-radius: 10px; padding: 10px; background: #fcfcfd; }
+    .metric b { display: block; font-size: 18px; }
+    .help { background: var(--soft); border: 1px solid #c7d7fe; border-radius: 10px; padding: 10px 12px; color: #344054; font-size: 13px; margin-top: 10px; }
+    .control-help { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+    .control-help div { border: 1px solid #edf0f6; border-radius: 8px; padding: 8px; font-size: 12px; background: #fcfcfd; }
+    .section { margin-top: 18px; }
+    .full-width { grid-column: 1 / -1; }
+    .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 12px; margin-top: 12px; max-height: 620px; background: #fff; }
+    .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .filters button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .report-card { border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-top: 12px; background: #fff; }
+    .report-viewer { white-space: pre-wrap; max-height: 420px; overflow: auto; background: #101828; color: #f8f9fc; padding: 14px; border-radius: 10px; margin-top: 10px; }
+    details.advanced { margin-top: 20px; }
+    details.advanced summary { cursor: pointer; font-weight: 700; }
+    .hidden { display: none !important; }
+    .small { font-size: 12px; }
+    @media (max-width: 1000px) {
+      .two-col, .three-col, .stepper { grid-template-columns: 1fr; }
+      .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      header { display: block; }
+      .workspace-select { margin-top: 12px; }
+    }
   </style>
 </head>
 <body>
-  <h1>Candidate Controls</h1>
-
-  <div class="card">
-    <h2>Research Run</h2>
-    <label for="runId">Run ID</label>
-    <input id="runId" type="text" value="d9c6c6f6-3a74-46f5-9019-40c0d8af5b8e" />
-    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">
-      <button id="btnLoadRun">Load Run</button>
-      <button id="btnListRuns">List Runs</button>
-      <button id="btnRefreshRuns">Refresh Runs</button>
+  <header>
+    <div>
+      <h1>Steam GTM Research</h1>
+      <p class="subhead">Research competitors, audience signals, and positioning opportunities for a Steam game.</p>
     </div>
-    <label for="runSelect">Select existing run</label>
-    <select id="runSelect">
-      <option value="">Choose a run</option>
-    </select>
-    <p class="status" id="selectedRun">Selected run: none</p>
-    <label for="organizationIdForList">Organization</label>
-    <select id="organizationIdForList">
-      <option value="">Choose an organization</option>
-      <option value="d76f2b86-7d52-40f7-9e2f-9f59f9d88d6c">Default Org</option>
-    </select>
-
-    <div style="margin-top: 16px; border-top: 1px solid #eee; padding-top: 16px;">
-      <h3>Create New Run</h3>
-      <label for="newRunGameId">Game UUID</label>
-      <input id="newRunGameId" placeholder="existing game UUID" />
-      <label for="newRunName">Run Name</label>
-      <input id="newRunName" placeholder="optional run name" />
-      <button id="btnCreateRun">Create Run</button>
+    <div class="workspace-select">
+      <label for="workspaceSelect">Workspace</label>
+      <select id="workspaceSelect"><option value="">Loading workspaces...</option></select>
     </div>
+  </header>
 
-    <p class="status" id="status">Enter a run ID and click Load Run.</p>
-  </div>
+  <main>
+    <p id="globalStatus" class="status">Loading dashboard...</p>
 
-  <div class="grid">
-    <div class="card">
-      <h2>Add Candidate Control</h2>
-      <label for="candidateTitle">Title</label>
-      <input id="candidateTitle" />
-      <label for="candidateUrl">Steam App ID or Steam Store URL</label>
-      <input id="candidateUrl" placeholder="e.g. 2288470 or https://store.steampowered.com/app/2288470/" />
-      <label for="controlType">Control Type</label>
-      <select id="controlType">
-        <option value="require_include">require_include</option>
-        <option value="must_consider">must_consider</option>
-        <option value="exclude">exclude</option>
-        <option value="benchmark_only">benchmark_only</option>
-        <option value="watchlist">watchlist</option>
-        <option value="note_only">note_only</option>
-      </select>
-      <label for="candidateReason">Reason</label>
-      <textarea id="candidateReason" rows="3"></textarea>
-      <label for="candidateNotes">User Notes</label>
-      <textarea id="candidateNotes" rows="3"></textarea>
-      <button id="btnSaveControl" disabled>Save Control</button>
-      <button id="btnCancelEdit" disabled>Cancel Edit</button>
-    </div>
+    <section id="dashboardMode" class="mode active">
+      <div class="grid two-col dashboard-actions">
+        <div class="action-card">
+          <h2>Start New Research Run</h2>
+          <p>Create a new analysis for a Steam game.</p>
+          <button id="btnStartNew" class="primary">Start New Run</button>
+        </div>
+        <div class="action-card">
+          <h2>Review Existing Research Run</h2>
+          <p>Open a saved run, adjust candidates, continue the pipeline, or view reports.</p>
+          <button id="btnBrowseRuns" class="secondary">Browse Runs</button>
+        </div>
+      </div>
 
-    <div class="card">
-      <h2>Run Summary</h2>
-      <div id="runSummary"></div>
-    <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
-      <button id="btnRefreshControls" disabled>Refresh Controls</button>
-      <button id="btnRefreshSummary" disabled>Refresh Candidate Summary</button>
-      <button id="btnGenerateCandidates" disabled>Generate Run Candidates</button>
-      <button id="btnRunPipeline" disabled>Run Full Pipeline</button>
-      <button id="btnRefreshReports" disabled>Refresh Reports</button>
-    </div>
-    <p class="status" id="refreshStatus"></p>
-    <p class="status" id="lastGenerated">Last generated: never</p>
-  </div>
-  <div class="card">
-    <h2>Candidate Controls</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Title</th>
-          <th>App ID</th>
-          <th>Type</th>
-          <th>Reason / Notes</th>
-        </tr>
-      </thead>
-      <tbody id="controlsTable"></tbody>
-    </table>
-  </div>
+      <section id="newRunPanel" class="card section hidden">
+        <h2>Create New Research Run</h2>
+        <p class="status">Start with the Steam game you want to research. UUIDs are handled behind the scenes.</p>
+        <div class="grid two-col">
+          <div>
+            <label for="existingGameSelect">Game</label>
+            <select id="existingGameSelect"><option value="">Select existing game or create new...</option></select>
+          </div>
+          <div>
+            <label for="seedSteamInput">Seed Steam App ID or URL</label>
+            <input id="seedSteamInput" placeholder="4405120 or https://store.steampowered.com/app/4405120/..." />
+          </div>
+          <div>
+            <label for="newGameTitle">Game Title</label>
+            <input id="newGameTitle" placeholder="Creepy Horrors: Blood Cult 2" />
+          </div>
+          <div>
+            <label for="newRunName">Run Name</label>
+            <input id="newRunName" placeholder="Blood Cult 2 competitor research" />
+          </div>
+          <div class="full-width">
+            <label for="newConceptNotes">Research Notes / Concept Notes</label>
+            <textarea id="newConceptNotes" rows="3" placeholder="Optional notes about the concept, audience, positioning, or questions to answer."></textarea>
+          </div>
+          <div class="full-width">
+            <label for="anchorTagsInput">Anchor Tags</label>
+            <input id="anchorTagsInput" placeholder="Creature Collector, Dungeon Crawler, Turn-Based, RPG" />
+          </div>
+        </div>
+        <div class="toolbar" style="margin-top:14px;">
+          <button id="btnCreateResearchRun" class="primary">Create Research Run</button>
+          <button id="btnCancelNewRun">Cancel</button>
+        </div>
+        <p id="newRunStatus" class="status"></p>
+      </section>
 
-  <div class="card">
-    <h2>Candidate Summary</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Title</th>
-          <th>App ID</th>
-          <th>Control Type</th>
-          <th>Pipeline Status</th>
-          <th>Required</th>
-          <th>Excluded</th>
-          <th>Benchmark</th>
-          <th>Notes</th>
-      <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="summaryTable"></tbody>
-    </table>
-  </div>
+      <section id="recentRunsSection" class="card section">
+        <div class="toolbar" style="justify-content:space-between;">
+          <div>
+            <h2>Recent Research Runs</h2>
+            <p class="status">Open a previous run without needing a UUID.</p>
+          </div>
+          <button id="btnRefreshRecent" class="secondary">Refresh Runs</button>
+        </div>
+        <label for="runSearch">Search</label>
+        <input id="runSearch" placeholder="Search by game, run name, or status..." />
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Game</th>
+                <th>Run Name</th>
+                <th>Status</th>
+                <th>Stage</th>
+                <th>Candidates</th>
+                <th>Reports</th>
+                <th>Last Updated</th>
+                <th>Open</th>
+              </tr>
+            </thead>
+            <tbody id="recentRunsTable"><tr><td colspan="8">Loading runs...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
 
-  <div class="card">
-    <h2>Generated Reports</h2>
-    <div id="reportsList">No reports loaded.</div>
-  </div>
+      <details class="advanced card">
+        <summary>Advanced</summary>
+        <p class="status">Admin/debug tools for existing backend behavior.</p>
+        <div class="grid two-col">
+          <div>
+            <label for="advancedRunId">Load by Run ID</label>
+            <input id="advancedRunId" value="d9c6c6f6-3a74-46f5-9019-40c0d8af5b8e" />
+          </div>
+          <div>
+            <label for="advancedGameUuid">Raw Game UUID</label>
+            <input id="advancedGameUuid" placeholder="Optional raw game UUID for debugging" />
+          </div>
+        </div>
+        <div class="toolbar" style="margin-top:12px;">
+          <button id="btnAdvancedLoad">Load Run ID</button>
+          <button id="btnAdvancedRefreshRuns">Refresh Runs</button>
+        </div>
+      </details>
+    </section>
+
+    <section id="workspaceMode" class="mode">
+      <div class="toolbar" style="margin-bottom:14px;">
+        <button id="btnBackDashboard">← Back to Dashboard</button>
+        <button id="btnWorkspaceRefresh">Refresh Workspace</button>
+      </div>
+
+      <section class="card loaded-run">
+        <div class="toolbar" style="justify-content:space-between;">
+          <div>
+            <h2>Loaded Run</h2>
+            <p id="loadedRunTitle" class="status">No run loaded.</p>
+          </div>
+          <span id="loadedRunStatusPill" class="pill">not loaded</span>
+        </div>
+        <div id="loadedRunDetails"></div>
+        <div class="metric-grid">
+          <div class="metric"><b id="metricControls">0</b><span>Guidance</span></div>
+          <div class="metric"><b id="metricCandidates">0</b><span>Candidates</span></div>
+          <div class="metric"><b id="metricRequired">0</b><span>Required</span></div>
+          <div class="metric"><b id="metricBenchmarks">0</b><span>Benchmarks</span></div>
+          <div class="metric"><b id="metricExcluded">0</b><span>Excluded</span></div>
+          <div class="metric"><b id="metricReports">0</b><span>Reports</span></div>
+        </div>
+      </section>
+
+      <section class="card section">
+        <h2>Research Workflow</h2>
+        <div id="stepper" class="stepper"></div>
+      </section>
+
+      <section class="card section">
+        <h2>Build Candidate Universe</h2>
+        <p class="help"><strong>Build Candidate Universe</strong> applies known game guidance, discovers candidates, enriches metadata, and filters/scores/classifies candidates. Reports are generated after candidate review.</p>
+        <div class="toolbar" style="margin-top:12px;">
+          <button id="btnBuildUniverse" class="primary">Build Candidate Universe</button>
+          <button id="btnApplyControls">Apply Known Games & Guidance</button>
+          <button id="btnConfirmComps" class="primary">Confirm Comps for Report</button>
+          <button id="btnGenerateReports">Generate Reports</button>
+          <button id="btnRefreshSummary">Refresh Candidate Summary</button>
+          <button id="btnRefreshReports">Refresh Reports</button>
+          <button id="btnRefreshControls">Refresh Guidance</button>
+        </div>
+        <p class="help"><strong>Apply Known Games & Guidance</strong> converts required, excluded, benchmark, and watchlist guidance into run candidate records. This does not discover, score, classify, or generate reports.</p>
+        <p id="actionStatus" class="status"></p>
+      </section>
+
+      <section class="card section">
+        <h2>Run Progress</h2>
+        <p><strong>Current Stage:</strong> <span id="progressStage">—</span> · <strong>Status:</strong> <span id="progressStatus">—</span></p>
+        <div id="runErrorBox" class="error-box hidden"></div>
+        <h3 style="margin-top:14px;">Recent Activity</h3>
+        <ul id="eventsList" class="status"><li>No events loaded.</li></ul>
+      </section>
+
+      <section class="card section">
+        <h2>Step 2: Known Games & Guidance</h2>
+        <p>Use known games and guidance to tell the system which games must be considered, excluded, or treated as benchmarks. This step is optional.</p>
+        <div class="toolbar" style="margin-top:10px;">
+          <button id="btnSkipGuidance">Skip Guidance</button>
+        </div>
+        <div class="control-help">
+          <div><strong>Required Include</strong><br />Force this game into the analysis and final consideration.</div>
+          <div><strong>Must Consider</strong><br />Ensure this game is evaluated by the system.</div>
+          <div><strong>Exclude</strong><br />Do not include this game in scoring, classification, or reports.</div>
+          <div><strong>Benchmark Only</strong><br />Use for commercial/scope comparison, not necessarily as a direct comp.</div>
+          <div><strong>Watchlist</strong><br />Track as interesting, but do not force into the report.</div>
+          <div><strong>Note Only</strong><br />Store context without changing pipeline behavior.</div>
+        </div>
+        <div class="grid two-col" style="margin-top:12px;">
+          <div>
+            <label for="candidateTitle">Title</label>
+            <input id="candidateTitle" />
+          </div>
+          <div>
+            <label for="candidateUrl">Steam App ID or Steam Store URL</label>
+            <input id="candidateUrl" placeholder="e.g. 2288470 or https://store.steampowered.com/app/2288470/" />
+          </div>
+          <div>
+            <label for="controlType">Control Type</label>
+            <select id="controlType">
+              <option value="require_include">Required Include</option>
+              <option value="must_consider">Must Consider</option>
+              <option value="exclude">Exclude</option>
+              <option value="benchmark_only">Benchmark Only</option>
+              <option value="watchlist">Watchlist</option>
+              <option value="note_only">Note Only</option>
+            </select>
+          </div>
+          <div>
+            <label for="candidateReason">Reason</label>
+            <input id="candidateReason" />
+          </div>
+          <div class="full-width">
+            <label for="candidateNotes">User Notes</label>
+            <textarea id="candidateNotes" rows="3"></textarea>
+          </div>
+        </div>
+        <div class="toolbar" style="margin-top:12px;">
+          <button id="btnSaveControl" class="primary">Save Control</button>
+          <button id="btnCancelEdit">Cancel Edit</button>
+        </div>
+        <p id="controlStatus" class="status"></p>
+        <h3 style="margin-top:16px;">Saved Known Games & Guidance</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Title</th><th>Steam App ID</th><th>Control Type</th><th>Reason</th><th>User Notes</th><th>Created At</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="controlsTable"><tr><td colspan="7">No run loaded.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card section full-width">
+        <h2>Step 4: Review, Sort, Filter & Exclude Comps</h2>
+        <p class="status">Sort, filter, select/unselect, and exclude comps before confirming the set for reports.</p>
+        <div id="approvalNotice" class="help">Candidate set is not approved yet. Confirm comps before generating reports.</div>
+        <div class="toolbar" style="margin-top:12px;">
+          <label style="margin-top:0;">Search <input id="candidateSearch" placeholder="Search title, source, classification, reasoning..." /></label>
+          <label style="margin-top:0;">Sort
+            <select id="candidateSort">
+              <option value="final_rank">Final Rank</option>
+              <option value="fit_score">Fit Score</option>
+              <option value="review_count">Review Count</option>
+              <option value="confidence">Confidence</option>
+              <option value="title">Title</option>
+              <option value="classification">Classification</option>
+            </select>
+          </label>
+          <label style="margin-top:0;">Direction
+            <select id="candidateSortDirection">
+              <option value="asc">Ascending</option>
+              <option value="desc">Descending</option>
+            </select>
+          </label>
+        </div>
+        <div class="filters" id="candidateFilters">
+          <button data-filter="all" class="active">All</button>
+          <button data-filter="required">Required</button>
+          <button data-filter="benchmarks">Benchmarks</button>
+          <button data-filter="discovered">Discovered</button>
+          <button data-filter="selected">Selected for Report</button>
+          <button data-filter="excluded">Excluded / Noise</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Actions</th><th>Rank</th><th>Title</th><th>Steam App ID</th><th>Source</th><th>Control</th><th>Status</th><th>Reviews</th><th>Fit</th><th>Classification</th><th>Confidence</th><th>Required</th><th>Benchmark</th><th>Excluded</th><th>Selected</th><th>Reasoning / Notes</th>
+              </tr>
+            </thead>
+            <tbody id="summaryTable"><tr><td colspan="16">No run loaded.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card section">
+        <h2>Step 5: Generate Reports</h2>
+        <p class="status">Reports are the final outputs. Open, copy, or download markdown.</p>
+        <div id="reportsList">No reports loaded.</div>
+      </section>
+
+      <details class="advanced card section">
+        <summary>Advanced / Admin Actions</summary>
+        <p class="status">Run Full Pipeline is retained for admin/dev use. It bypasses the normal user checkpoint between candidate review and report generation.</p>
+        <button id="btnRunPipeline">Run Full Pipeline</button>
+      </details>
+    </section>
+  </main>
 
   <script>
-    const statusEl = document.getElementById('status');
-    const refreshStatusEl = document.getElementById('refreshStatus');
-    const runIdEl = document.getElementById('runId');
-    const runSelect = document.getElementById('runSelect');
-    const organizationIdForListEl = document.getElementById('organizationIdForList');
-    const newRunGameIdEl = document.getElementById('newRunGameId');
-    const newRunNameEl = document.getElementById('newRunName');
-    const controlsTable = document.getElementById('controlsTable');
-    const summaryTable = document.getElementById('summaryTable');
-    const runSummary = document.getElementById('runSummary');
-    const selectedRunEl = document.getElementById('selectedRun');
-    const saveButton = document.getElementById('btnSaveControl');
-    const cancelEditButton = document.getElementById('btnCancelEdit');
-    const refreshControlsButton = document.getElementById('btnRefreshControls');
-    const refreshSummaryButton = document.getElementById('btnRefreshSummary');
-    const listRunsButton = document.getElementById('btnListRuns');
-    const refreshRunsButton = document.getElementById('btnRefreshRuns');
-    const createRunButton = document.getElementById('btnCreateRun');
-    const generateCandidatesButton = document.getElementById('btnGenerateCandidates');
-    const runPipelineButton = document.getElementById('btnRunPipeline');
-    const refreshReportsButton = document.getElementById('btnRefreshReports');
-    const reportsList = document.getElementById('reportsList');
+    const DEFAULT_ORG_ID = 'd76f2b86-7d52-40f7-9e2f-9f59f9d88d6c';
+    const DEFAULT_RUN_ID = 'd9c6c6f6-3a74-46f5-9019-40c0d8af5b8e';
+    const controlLabels = {
+      require_include: 'Required Include',
+      must_consider: 'Must Consider',
+      exclude: 'Exclude',
+      benchmark_only: 'Benchmark Only',
+      watchlist: 'Watchlist',
+      note_only: 'Note Only',
+    };
+    const sourceLabels = {
+      steam_more_like_this: 'Steam More Like This',
+      tag_search: 'Tag Search',
+      tag_combination_search: 'Tag Combination',
+      user_supplied: 'User Supplied',
+      client_supplied: 'Client Supplied',
+      reverse_similarity: 'Reverse Similarity',
+      llm_suggested: 'LLM Suggested',
+      manual_research: 'Manual Research',
+      external_source: 'External Source',
+      unknown: 'Unknown',
+    };
 
-    let config = null;
-    let editingControlId = null;
-    const controlsById = new Map();
+    const state = {
+      organizations: [], games: [], runs: [], recentRows: [], currentRun: null, currentGame: null,
+      controls: [], candidates: [], reports: [], events: [], candidateFilter: 'all', candidateSearch: '', candidateSort: 'final_rank', candidateSortDirection: 'asc', editingControlId: null,
+    };
 
-    function setRunLoadedState(isLoaded) {
-      saveButton.disabled = !isLoaded;
-      generateCandidatesButton.disabled = !isLoaded;
-      runPipelineButton.disabled = !isLoaded;
-      refreshControlsButton.disabled = !isLoaded;
-      refreshSummaryButton.disabled = !isLoaded;
-      refreshReportsButton.disabled = !isLoaded;
+    const $ = (id) => document.getElementById(id);
+    const globalStatus = $('globalStatus');
+    const dashboardMode = $('dashboardMode');
+    const workspaceMode = $('workspaceMode');
+    const workspaceSelect = $('workspaceSelect');
+    const recentRunsTable = $('recentRunsTable');
+    const runSearch = $('runSearch');
+    const existingGameSelect = $('existingGameSelect');
+    const reportsList = $('reportsList');
+
+    function buildUrl(path, query = '') { return `/api/${path}${query ? `?${query}` : ''}`; }
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+    function parseSteamAppid(value) {
+      const text = String(value || '').trim();
+      if (!text) return null;
+      if (/^\d+$/.test(text)) return Number(text);
+      const match = text.match(/\/app\/(\d+)/) || text.match(/(\d{3,})/);
+      return match ? Number(match[1]) : null;
+    }
+    function canonicalSteamUrl(appid) { return appid ? `https://store.steampowered.com/app/${appid}/` : null; }
+    function formatDate(value) {
+      if (!value) return '—';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      return date.toLocaleString();
+    }
+    function statusPill(status) {
+      const cls = status === 'completed' ? 'completed' : status === 'running' || status === 'queued' ? 'running' : status === 'failed' ? 'failed' : '';
+      return `<span class="pill ${cls}">${escapeHtml(status || 'unknown')}</span>`;
+    }
+    async function fetchJson(path, query = '', options = {}) {
+      const resp = await fetch(buildUrl(path, query), options);
+      const text = await resp.text();
+      let data = null;
+      if (text) {
+        try { data = JSON.parse(text); } catch { data = text; }
+      }
+      if (!resp.ok) throw new Error(typeof data === 'string' ? data : JSON.stringify(data));
+      return data;
+    }
+    function selectedOrgId() { return workspaceSelect.value || DEFAULT_ORG_ID; }
+
+    function switchMode(mode) {
+      dashboardMode.classList.toggle('active', mode === 'dashboard');
+      workspaceMode.classList.toggle('active', mode === 'workspace');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    setRunLoadedState(false);
-    setEditState(false);
-
-    function buildUrl(path, query = '') {
-      return `/api/${path}${query ? `?${query}` : ''}`;
+    async function loadOrganizations() {
+      try {
+        state.organizations = await fetchJson('organizations');
+      } catch (error) {
+        state.organizations = [{ id: DEFAULT_ORG_ID, name: 'Default Org' }];
+        globalStatus.textContent = `Could not load organizations: ${error.message}`;
+      }
+      if (!state.organizations.length) state.organizations = [{ id: DEFAULT_ORG_ID, name: 'Default Org' }];
+      workspaceSelect.innerHTML = state.organizations.map(org => `<option value="${escapeHtml(org.id)}">${escapeHtml(org.name || org.slug || org.id)}</option>`).join('');
+      if (state.organizations.some(org => org.id === DEFAULT_ORG_ID)) workspaceSelect.value = DEFAULT_ORG_ID;
     }
 
-    function parseSteamUrl(value) {
-      const digits = value.match(/\d+/g);
-      if (!digits) return null;
-      return digits[0];
+    async function loadGames() {
+      const orgId = selectedOrgId();
+      state.games = await fetchJson('games', `organization_id=${encodeURIComponent(orgId)}`);
+      existingGameSelect.innerHTML = '<option value="">+ Create New Game</option>' + state.games.map(game => `<option value="${escapeHtml(game.id)}" data-appid="${escapeHtml(game.steam_appid || '')}">${escapeHtml(game.title)}${game.steam_appid ? ` (${game.steam_appid})` : ''}</option>`).join('');
     }
 
-    let currentRun = null;
+    async function loadRecentRuns() {
+      const orgId = selectedOrgId();
+      recentRunsTable.innerHTML = '<tr><td colspan="8">Loading runs...</td></tr>';
+      state.runs = await fetchJson('research_runs', `organization_id=${encodeURIComponent(orgId)}`);
+      const gameById = new Map(state.games.map(game => [game.id, game]));
+      state.recentRows = await Promise.all(state.runs.map(async (run) => {
+        const [summary, reports] = await Promise.all([
+          fetchJson('v_run_candidate_summary', `run_id=${encodeURIComponent(run.id)}`).catch(() => []),
+          fetchJson('reports', `run_id=${encodeURIComponent(run.id)}`).catch(() => []),
+        ]);
+        const game = gameById.get(run.game_id) || {};
+        return { run, game, candidateCount: Array.isArray(summary) ? summary.length : 0, reportCount: Array.isArray(reports) ? reports.length : 0 };
+      }));
+      renderRecentRuns();
+    }
 
-    async function loadRun() {
-      statusEl.textContent = 'Loading run...';
-      generateCandidatesButton.disabled = true;
-      const runId = runIdEl.value.trim();
-      if (!runId) {
-        statusEl.textContent = 'Run ID is required.';
+    function renderRecentRuns() {
+      const query = runSearch.value.trim().toLowerCase();
+      const rows = state.recentRows.filter(row => {
+        const text = `${row.game.title || ''} ${row.run.name || ''} ${row.run.status || ''} ${row.run.current_stage || ''}`.toLowerCase();
+        return !query || text.includes(query);
+      });
+      if (!rows.length) {
+        recentRunsTable.innerHTML = '<tr><td colspan="8">No matching research runs.</td></tr>';
         return;
       }
+      recentRunsTable.innerHTML = rows.map(row => `
+        <tr>
+          <td>${escapeHtml(row.game.title || 'Unknown game')}</td>
+          <td>${escapeHtml(row.run.name || '(unnamed run)')}</td>
+          <td>${statusPill(row.run.status)}</td>
+          <td>${escapeHtml(row.run.current_stage || '—')}</td>
+          <td>${row.candidateCount}</td>
+          <td>${row.reportCount}</td>
+          <td>${escapeHtml(formatDate(row.run.updated_at || row.run.created_at))}</td>
+          <td><button data-run-id="${escapeHtml(row.run.id)}" class="open-run">Open</button></td>
+        </tr>
+      `).join('');
+    }
+
+    async function refreshDashboard() {
+      globalStatus.textContent = 'Loading dashboard...';
+      await loadGames();
+      await loadRecentRuns();
+      globalStatus.textContent = 'Dashboard ready.';
+    }
+
+    async function createResearchRun() {
+      const orgId = selectedOrgId();
+      const existingGameId = existingGameSelect.value;
+      const steamAppid = parseSteamAppid($('seedSteamInput').value);
+      const title = $('newGameTitle').value.trim();
+      const runName = $('newRunName').value.trim() || (title ? `${title} research run` : 'Steam GTM Research Run');
+      const conceptNotes = $('newConceptNotes').value.trim();
+      const anchorTags = $('anchorTagsInput').value.split(',').map(tag => tag.trim()).filter(Boolean);
+      $('newRunStatus').textContent = 'Creating research run...';
 
       try {
-        const runResp = await fetch(buildUrl('research_runs', `id=${encodeURIComponent(runId)}`));
-        const runs = await runResp.json();
-        if (!Array.isArray(runs) || runs.length === 0) {
-          currentRun = null;
-        setRunLoadedState(false);
-        if (selectedRunEl) {
-          selectedRunEl.textContent = 'Selected run: none';
+        let gameId = existingGameId;
+        if (!gameId) {
+          if (!title) throw new Error('Game Title is required when creating a new game.');
+          const gamePayload = {
+            organization_id: orgId,
+            title,
+            steam_appid: steamAppid,
+            steam_url: canonicalSteamUrl(steamAppid),
+            status: steamAppid ? 'steam_page_live' : 'unknown',
+            concept_notes: conceptNotes || null,
+            raw_intake_json: { source: 'ui_create_research_run', anchor_tags: anchorTags },
+          };
+          const createdGame = await fetchJson('games', '', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(gamePayload) });
+          const game = Array.isArray(createdGame) ? createdGame[0] : createdGame;
+          gameId = game.id;
         }
-          controlsTable.innerHTML = '';
-          summaryTable.innerHTML = '';
-          reportsList.innerHTML = 'No reports loaded.';
-          statusEl.textContent = 'Research run not found.';
-          return;
-        }
-
-        currentRun = runs[0];
-        if (runSelect) {
-          const optionExists = Array.from(runSelect.options).some(opt => opt.value === runId);
-          if (!optionExists) {
-            runSelect.insertAdjacentHTML('beforeend', `<option value="${runId}">${currentRun.name || runId}</option>`);
-          }
-          runSelect.value = runId;
-        }
-        setRunLoadedState(true);
-        if (selectedRunEl) {
-          selectedRunEl.textContent = `Selected run: ${currentRun.name || currentRun.id}`;
-        }
-        runSummary.innerHTML = `
-          <p><strong>Name:</strong> ${currentRun.name || '(unnamed)'}</p>
-          <p><strong>Status:</strong> ${currentRun.status}</p>
-          <p><strong>Stage:</strong> ${currentRun.current_stage}</p>
-          <pre>${JSON.stringify(currentRun.run_config, null, 2)}</pre>
-        `;
-        await loadControls(runId);
-        await loadCandidateSummary(runId);
-        await loadReports(runId);
-        if (generateCandidatesButton) generateCandidatesButton.disabled = false;
-        statusEl.textContent = 'Loaded run successfully.';
+        if (!gameId) throw new Error('Select or create a game first.');
+        const runPayload = {
+          game_id: gameId,
+          organization_id: orgId,
+          name: runName,
+          status: 'draft',
+          current_stage: 'intake',
+          run_config: { anchor_tags: anchorTags, research_notes: conceptNotes },
+        };
+        const createdRun = await fetchJson('research_runs', '', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(runPayload) });
+        const run = Array.isArray(createdRun) ? createdRun[0] : createdRun;
+        $('newRunStatus').textContent = `Created research run: ${run.name || run.id}`;
+        await refreshDashboard();
+        await openRun(run.id);
       } catch (error) {
-        currentRun = null;
-        setRunLoadedState(false);
-        if (selectedRunEl) {
-          selectedRunEl.textContent = 'Selected run: none';
-        }
-        statusEl.textContent = `Error loading run: ${error.message}`;
+        $('newRunStatus').textContent = `Create failed: ${error.message}`;
       }
     }
 
-    async function loadControls(runId) {
-      const resp = await fetch(buildUrl('run_candidate_controls', `run_id=${encodeURIComponent(runId)}`));
-      const controls = await resp.json();
-      if (!Array.isArray(controls) || controls.length === 0) {
-        controlsTable.innerHTML = '<tr><td colspan="5">No candidate controls found.</td></tr>';
-        controlsById.clear();
+    async function openRun(runId) {
+      globalStatus.textContent = 'Loading research run...';
+      const runs = await fetchJson('research_runs', `id=${encodeURIComponent(runId)}`);
+      if (!Array.isArray(runs) || !runs.length) throw new Error('Research run not found.');
+      state.currentRun = runs[0];
+      state.currentGame = state.games.find(game => game.id === state.currentRun.game_id) || null;
+      if (!state.currentGame) {
+        await loadGames();
+        state.currentGame = state.games.find(game => game.id === state.currentRun.game_id) || null;
+      }
+      await refreshWorkspaceData();
+      switchMode('workspace');
+      globalStatus.textContent = 'Research run loaded.';
+    }
+
+    async function refreshWorkspaceData() {
+      if (!state.currentRun) return;
+      const runId = state.currentRun.id;
+      const [controls, candidates, reports, events, freshRun] = await Promise.all([
+        fetchJson('run_candidate_controls', `run_id=${encodeURIComponent(runId)}`).catch(() => []),
+        fetchJson('v_run_candidate_summary', `run_id=${encodeURIComponent(runId)}`).catch(() => []),
+        fetchJson('reports', `run_id=${encodeURIComponent(runId)}`).catch(() => []),
+        fetchJson('run_events', `run_id=${encodeURIComponent(runId)}&limit=100`).catch(() => []),
+        fetchJson('research_runs', `id=${encodeURIComponent(runId)}`).catch(() => [state.currentRun]),
+      ]);
+      state.currentRun = Array.isArray(freshRun) && freshRun[0] ? freshRun[0] : state.currentRun;
+      state.controls = Array.isArray(controls) ? controls : [];
+      state.candidates = Array.isArray(candidates) ? candidates : [];
+      state.reports = Array.isArray(reports) ? reports : [];
+      state.events = Array.isArray(events) ? events : [];
+      renderWorkspace();
+    }
+
+    function renderWorkspace() {
+      const run = state.currentRun || {};
+      const game = state.currentGame || {};
+      $('loadedRunTitle').textContent = `${game.title || 'Unknown game'} · ${run.name || '(unnamed run)'}`;
+      const loadedRunStatusPill = $('loadedRunStatusPill');
+      loadedRunStatusPill.className = `pill ${run.status === 'completed' ? 'completed' : run.status === 'running' || run.status === 'queued' ? 'running' : run.status === 'failed' ? 'failed' : ''}`;
+      loadedRunStatusPill.textContent = run.status || 'unknown';
+      const org = state.organizations.find(item => item.id === run.organization_id) || {};
+      $('loadedRunDetails').innerHTML = `
+        <p><strong>Game:</strong> ${escapeHtml(game.title || 'Unknown game')}</p>
+        <p><strong>Steam App ID:</strong> ${escapeHtml(game.steam_appid || '—')} ${game.steam_url ? `· <a href="${escapeHtml(game.steam_url)}" target="_blank">Steam page</a>` : ''}</p>
+        <p><strong>Run:</strong> ${escapeHtml(run.name || '(unnamed run)')}</p>
+        <p><strong>Status:</strong> ${escapeHtml(run.status || '—')} · <strong>Current Stage:</strong> ${escapeHtml(run.current_stage || '—')} · <strong>Workspace:</strong> ${escapeHtml(org.name || org.slug || run.organization_id || '—')}</p>
+        <p class="status"><strong>Run ID:</strong> ${escapeHtml(run.id || '—')} · <strong>Last Updated:</strong> ${escapeHtml(formatDate(run.updated_at || run.created_at))}</p>
+      `;
+      const required = state.candidates.filter(c => c.is_user_required).length;
+      const benchmarks = state.candidates.filter(c => c.is_benchmark_only).length;
+      const excluded = state.candidates.filter(c => c.is_user_excluded || c.pipeline_status === 'excluded_by_user' || c.classification === 'noise').length;
+      $('metricControls').textContent = state.controls.length;
+      $('metricCandidates').textContent = state.candidates.length;
+      $('metricRequired').textContent = required;
+      $('metricBenchmarks').textContent = benchmarks;
+      $('metricExcluded').textContent = excluded;
+      $('metricReports').textContent = state.reports.length;
+      $('progressStage').textContent = run.current_stage || '—';
+      $('progressStatus').textContent = run.status || '—';
+      if (run.status === 'failed' || run.failure_message) {
+        $('runErrorBox').classList.remove('hidden');
+        $('runErrorBox').innerHTML = `<strong>Research failed${run.current_stage ? ` during ${escapeHtml(run.current_stage)}` : ''}.</strong><br><br><strong>Error:</strong><br>${escapeHtml(run.failure_message || 'Unknown error')}`;
+      } else {
+        $('runErrorBox').classList.add('hidden');
+        $('runErrorBox').innerHTML = '';
+      }
+      renderStepper();
+      renderEvents();
+      renderControls();
+      renderCandidateSummary();
+      renderReports();
+    }
+
+    function hasEvent(eventType) {
+      return state.events.some(event => event.event_type === eventType);
+    }
+    function latestEventTime(eventType) {
+      const event = state.events
+        .filter(item => item.event_type === eventType)
+        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0];
+      return event ? new Date(event.created_at).getTime() : 0;
+    }
+    function guidanceSkipped() {
+      return hasEvent('known_games_guidance_skipped');
+    }
+    function candidateSetApproved() {
+      const approvedAt = latestEventTime('candidate_set_approved');
+      if (!approvedAt) return false;
+      return latestEventTime('candidate_set_changed_after_approval') <= approvedAt;
+    }
+    function candidateSetChangedAfterApproval() {
+      const approvedAt = latestEventTime('candidate_set_approved');
+      return !!approvedAt && latestEventTime('candidate_set_changed_after_approval') > approvedAt;
+    }
+    function candidateUniverseBuilt() {
+      return state.candidates.some(candidate => candidate.fit_score != null || candidate.classification) || hasEvent('candidate_universe_completed');
+    }
+    function reportsGenerated() {
+      return state.reports.length > 0;
+    }
+    function stepStatus(stepName) {
+      const run = state.currentRun || {};
+      if (run.status === 'failed' && stepName.stages.includes(run.current_stage)) return 'failed';
+      if (run.status === 'running' && stepName.stages.includes(run.current_stage)) return 'running';
+      if (stepName.name === 'Research Setup') return state.currentRun && state.currentGame ? 'completed' : 'ready';
+      if (stepName.name === 'Known Games & Guidance') return state.controls.length > 0 || guidanceSkipped() ? 'completed' : 'ready';
+      if (stepName.name === 'Build Candidate Universe') return candidateUniverseBuilt() ? 'completed' : 'ready';
+      if (stepName.name === 'Review, Sort, Filter & Exclude Comps') return candidateSetApproved() ? 'completed' : (candidateUniverseBuilt() ? 'ready' : 'not started');
+      if (stepName.name === 'Generate Reports') return reportsGenerated() ? 'completed' : (candidateSetApproved() ? 'ready' : 'not started');
+      return 'ready';
+    }
+    function renderStepper() {
+      const steps = [
+        { name: 'Research Setup', stages: ['intake'] },
+        { name: 'Known Games & Guidance', stages: ['discovery'] },
+        { name: 'Build Candidate Universe', stages: ['page_signals', 'discovery', 'enrichment', 'filtering', 'scoring', 'shortlisting', 'classification'] },
+        { name: 'Review, Sort, Filter & Exclude Comps', stages: ['classification'] },
+        { name: 'Generate Reports', stages: ['report_generation', 'review_collection', 'review_analysis', 'completed'] },
+      ];
+      $('stepper').innerHTML = steps.map((step, index) => {
+        const status = stepStatus(step);
+        return `<div class="step ${status}"><strong>${index + 1}. ${escapeHtml(step.name)}</strong><span>${escapeHtml(status)}</span></div>`;
+      }).join('');
+      renderWorkflowActions();
+    }
+    function renderWorkflowActions() {
+      const universeBuilt = candidateUniverseBuilt();
+      const approved = candidateSetApproved();
+      const changed = candidateSetChangedAfterApproval();
+      $('btnBuildUniverse').classList.toggle('primary', !universeBuilt);
+      $('btnConfirmComps').classList.toggle('primary', universeBuilt && !approved);
+      $('btnGenerateReports').classList.toggle('primary', approved);
+      $('btnConfirmComps').disabled = !universeBuilt;
+      $('btnGenerateReports').disabled = !approved;
+      const notice = $('approvalNotice');
+      if (!universeBuilt) {
+        notice.textContent = 'Build the candidate universe before confirming comps for report.';
+      } else if (changed) {
+        notice.textContent = 'Candidate selections or exclusions changed after approval. Re-confirm comps before generating reports.';
+      } else if (approved) {
+        notice.textContent = 'Candidate set approved. Reports can be generated.';
+      } else {
+        notice.textContent = 'Candidate set is not approved yet. Confirm comps before generating reports.';
+      }
+    }
+    function renderEvents() {
+      if (!state.events.length) {
+        $('eventsList').innerHTML = '<li>No events yet.</li>';
         return;
       }
-      controlsTable.innerHTML = controls.map(control => `
+      $('eventsList').innerHTML = state.events.slice(0, 10).map(event => `<li>${escapeHtml(formatDate(event.created_at))}: ${escapeHtml(event.message || event.event_type || 'Event')}</li>`).join('');
+    }
+    function renderControls() {
+      if (!state.controls.length) {
+        $('controlsTable').innerHTML = '<tr><td colspan="7">No known games or guidance saved yet.</td></tr>';
+        return;
+      }
+      $('controlsTable').innerHTML = state.controls.map(control => `
         <tr>
-          <td>${control.title || ''}</td>
-          <td>${control.steam_appid || ''}</td>
-          <td>${control.control_type}</td>
-          <td>${[control.reason, control.user_notes].filter(Boolean).join(' / ')}</td>
+          <td>${escapeHtml(control.title)}</td>
+          <td>${escapeHtml(control.steam_appid || '')}</td>
+          <td>${escapeHtml(controlLabels[control.control_type] || control.control_type)}</td>
+          <td>${escapeHtml(control.reason || '')}</td>
+          <td>${escapeHtml(control.user_notes || '')}</td>
+          <td>${escapeHtml(formatDate(control.created_at))}</td>
+          <td><button class="edit-control" data-id="${escapeHtml(control.id)}">Edit</button> <button class="delete-control" data-id="${escapeHtml(control.id)}">Delete</button></td>
+        </tr>
+      `).join('');
+    }
+    function candidateMatchesFilter(item) {
+      switch (state.candidateFilter) {
+        case 'required': return item.is_user_required;
+        case 'benchmarks': return item.is_benchmark_only;
+        case 'discovered': return !['user_supplied', 'client_supplied'].includes(item.primary_source);
+        case 'selected': return item.is_selected_for_report;
+        case 'excluded': return item.is_user_excluded || item.pipeline_status === 'excluded_by_user' || item.classification === 'noise' || item.classification === 'low_fit';
+        default: return true;
+      }
+    }
+    function candidateMatchesSearch(item) {
+      const query = state.candidateSearch.trim().toLowerCase();
+      if (!query) return true;
+      const text = [item.title, item.steam_appid, item.primary_source, item.user_control_type, item.pipeline_status, item.classification, item.reasoning, item.overlapping_tags].join(' ').toLowerCase();
+      return text.includes(query);
+    }
+    function candidateSortValue(item, key) {
+      if (key === 'title' || key === 'classification') return String(item[key] || '').toLowerCase();
+      const value = item[key];
+      if (value === null || value === undefined || value === '') return Number.NEGATIVE_INFINITY;
+      return Number(value);
+    }
+    function sortedCandidates(rows) {
+      const direction = state.candidateSortDirection === 'desc' ? -1 : 1;
+      const key = state.candidateSort;
+      return [...rows].sort((a, b) => {
+        const av = candidateSortValue(a, key);
+        const bv = candidateSortValue(b, key);
+        if (av < bv) return -1 * direction;
+        if (av > bv) return 1 * direction;
+        return String(a.title || '').localeCompare(String(b.title || ''));
+      });
+    }
+    function renderCandidateSummary() {
+      const rows = sortedCandidates(state.candidates.filter(candidateMatchesFilter).filter(candidateMatchesSearch));
+      if (!rows.length) {
+        $('summaryTable').innerHTML = '<tr><td colspan="16">No candidates for this filter/search.</td></tr>';
+        return;
+      }
+      $('summaryTable').innerHTML = rows.map(item => `
+        <tr>
           <td>
-            <button class="edit-control" data-id="${control.id}">Edit</button>
-            <button class="delete-control" data-id="${control.id}">Delete</button>
+            <button class="toggle-selected" data-id="${escapeHtml(item.candidate_id)}">${item.is_selected_for_report ? 'Unselect' : 'Select'}</button>
+            <button class="toggle-excluded" data-id="${escapeHtml(item.candidate_id)}">${item.is_user_excluded ? 'Restore' : 'Exclude'}</button>
           </td>
-        </tr>
-      `).join('');
-      controlsById.clear();
-      controls.forEach(control => controlsById.set(control.id, control));
-    }
-
-    async function loadCandidateSummary(runId) {
-      const resp = await fetch(buildUrl('v_run_candidate_summary', `run_id=${encodeURIComponent(runId)}`));
-      if (!resp.ok) {
-        const text = await resp.text();
-        refreshStatusEl.textContent = `Summary load failed: ${text || resp.statusText}`;
-        return;
-      }
-      const summary = await resp.json();
-      if (!Array.isArray(summary) || summary.length === 0) {
-        summaryTable.innerHTML = '<tr><td colspan="8">No candidate summary rows found.</td></tr>';
-        return;
-      }
-      summaryTable.innerHTML = summary.map(item => `
-        <tr>
-          <td>${item.title || ''}</td>
-          <td>${item.steam_appid || ''}</td>
-          <td>${item.user_control_type || ''}</td>
-          <td>${item.pipeline_status || ''}</td>
+          <td>${escapeHtml(item.final_rank || '')}</td>
+          <td>${escapeHtml(item.title || '')}</td>
+          <td>${escapeHtml(item.steam_appid || '')}</td>
+          <td>${escapeHtml(sourceLabels[item.primary_source] || item.primary_source || '')}</td>
+          <td>${escapeHtml(controlLabels[item.user_control_type] || item.user_control_type || '')}</td>
+          <td>${escapeHtml(item.pipeline_status || '')}</td>
+          <td>${escapeHtml(item.review_count || 0)}</td>
+          <td>${item.fit_score == null ? '' : Number(item.fit_score).toFixed(1)}</td>
+          <td>${escapeHtml(item.classification || '')}</td>
+          <td>${item.confidence == null ? '' : Number(item.confidence).toFixed(2)}</td>
           <td>${item.is_user_required ? 'yes' : 'no'}</td>
-          <td>${item.is_user_excluded ? 'yes' : 'no'}</td>
           <td>${item.is_benchmark_only ? 'yes' : 'no'}</td>
-          <td>${item.reasoning || ''}</td>
+          <td>${item.is_user_excluded ? 'yes' : 'no'}</td>
+          <td>${item.is_selected_for_report ? 'yes' : 'no'}</td>
+          <td>${escapeHtml(item.reasoning || item.overlapping_tags || '')}</td>
         </tr>
       `).join('');
     }
-
-    function escapeHtml(value) {
-      return String(value || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
-
-    async function loadReports(runId) {
-      const resp = await fetch(buildUrl('reports', `run_id=${encodeURIComponent(runId)}`));
-      if (!resp.ok) {
-        const text = await resp.text();
-        reportsList.innerHTML = `<p class="status">Report load failed: ${escapeHtml(text || resp.statusText)}</p>`;
-        return;
-      }
-      const reports = await resp.json();
-      if (!Array.isArray(reports) || reports.length === 0) {
+    function renderReports() {
+      if (!state.reports.length) {
         reportsList.innerHTML = '<p class="status">No reports generated yet.</p>';
         return;
       }
-      reportsList.innerHTML = reports.map(report => `
-        <details style="margin: 8px 0;">
-          <summary><strong>${escapeHtml(report.report_type)}</strong> — ${escapeHtml(report.title)} (${escapeHtml(report.created_at)})</summary>
-          <p class="status">Generated by ${escapeHtml(report.generated_by)} / template ${escapeHtml(report.template_version)}</p>
-          <pre class="report">${escapeHtml(report.content_md)}</pre>
-        </details>
+      reportsList.innerHTML = state.reports.map(report => `
+        <div class="report-card">
+          <div class="toolbar" style="justify-content:space-between;">
+            <div>
+              <h3>${escapeHtml(report.title || report.report_type)}</h3>
+              <p class="status">${escapeHtml(report.report_type)} · Generated ${escapeHtml(formatDate(report.created_at))} · ${escapeHtml(report.template_version || '')}</p>
+            </div>
+            <div class="toolbar">
+              <button class="toggle-report" data-id="${escapeHtml(report.id)}">Open</button>
+              <button class="copy-report" data-id="${escapeHtml(report.id)}">Copy Markdown</button>
+              <button class="download-report" data-id="${escapeHtml(report.id)}">Download Markdown</button>
+            </div>
+          </div>
+          <pre id="report-${escapeHtml(report.id)}" class="report-viewer hidden">${escapeHtml(report.content_md || '')}</pre>
+        </div>
       `).join('');
     }
 
     async function saveControl() {
-      const runId = runIdEl.value.trim();
-      if (!runId) {
-        statusEl.textContent = 'Run ID is required to save a control.';
-        return;
-      }
-
-      const title = document.getElementById('candidateTitle').value.trim();
-      const url = document.getElementById('candidateUrl').value.trim();
-      const controlType = document.getElementById('controlType').value;
-      const reason = document.getElementById('candidateReason').value.trim();
-      const notes = document.getElementById('candidateNotes').value.trim();
-
-      if (!title && !url) {
-        statusEl.textContent = 'A title or Steam URL/App ID is required.';
-        return;
-      }
-
-      if (!currentRun) {
-        statusEl.textContent = 'Load a run before saving a candidate control.';
-        return;
-      }
-
-      const body = {
-        run_id: runId,
-        organization_id: currentRun.organization_id,
-        control_type: controlType,
-        title,
-        user_notes: notes,
-        reason,
-        raw_input_json: { title, url, controlType, reason, notes },
-      };
-
-      if (url) {
-        const appid = parseSteamUrl(url);
-        if (appid) {
-          body.steam_appid = Number(appid);
-          body.steam_url = `https://store.steampowered.com/app/${appid}/`;
-        } else {
-          body.steam_url = url;
-        }
-      }
-
-      const method = editingControlId ? 'PATCH' : 'POST';
-      if (editingControlId) {
-        body.id = editingControlId;
-        statusEl.textContent = 'Updating candidate control...';
-      } else {
-        statusEl.textContent = 'Saving candidate control...';
-      }
-
-      saveButton.disabled = true;
+      if (!state.currentRun) { $('controlStatus').textContent = 'Load a run before saving known game guidance.'; return; }
+      const title = $('candidateTitle').value.trim();
+      const url = $('candidateUrl').value.trim();
+      const controlType = $('controlType').value;
+      const reason = $('candidateReason').value.trim();
+      const notes = $('candidateNotes').value.trim();
+      if (!title && !url) { $('controlStatus').textContent = 'A title or Steam URL/App ID is required.'; return; }
+      if (!controlType) { $('controlStatus').textContent = 'Control type is required.'; return; }
+      const appid = parseSteamAppid(url);
+      const body = { run_id: state.currentRun.id, organization_id: state.currentRun.organization_id, control_type: controlType, title, reason, user_notes: notes, raw_input_json: { title, url, controlType, reason, notes } };
+      if (appid) { body.steam_appid = appid; body.steam_url = canonicalSteamUrl(appid); }
+      else if (url) body.steam_url = url;
+      if (state.editingControlId) body.id = state.editingControlId;
+      $('controlStatus').textContent = state.editingControlId ? 'Updating control...' : 'Saving control...';
       try {
-        const resp = await fetch(buildUrl('run_candidate_controls', ''), {
-          method,
-          headers: {
-            'Content-Type': 'application/json',
-            Prefer: 'return=representation',
-          },
-          body: JSON.stringify(body),
-        });
-
-        let result = null;
-        const text = await resp.text();
-        if (text) {
-          try {
-            result = JSON.parse(text);
-          } catch (error) {
-            result = text;
-          }
-        }
-
-        if (resp.status >= 400) {
-          statusEl.textContent = `Failed to save control: ${JSON.stringify(result)}`;
-          return;
-        }
-
-        const savedControl = Array.isArray(result) ? result[0] : result;
-        statusEl.textContent = editingControlId
-          ? `Candidate control updated${savedControl && savedControl.id ? ` (ID ${savedControl.id})` : ''}.`
-          : `Candidate control saved${savedControl && savedControl.id ? ` (ID ${savedControl.id})` : ''}.`;
+        await fetchJson('run_candidate_controls', '', { method: state.editingControlId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(body) });
+        $('controlStatus').textContent = state.editingControlId ? 'Guidance updated.' : 'Guidance saved.';
         resetControlForm();
-        await loadControls(runId);
-        await loadCandidateSummary(runId);
-        await loadReports(runId);
-      } finally {
-        saveButton.disabled = false;
-      }
-    }
-
-    function enterEditMode(controlId) {
-      const control = controlsById.get(controlId);
-      if (!control) {
-        statusEl.textContent = 'Control not found for editing.';
-        return;
-      }
-      editingControlId = controlId;
-      document.getElementById('candidateTitle').value = control.title || '';
-      document.getElementById('candidateUrl').value = control.steam_url || (control.steam_appid ? String(control.steam_appid) : '') || '';
-      document.getElementById('controlType').value = control.control_type || 'require_include';
-      document.getElementById('candidateReason').value = control.reason || '';
-      document.getElementById('candidateNotes').value = control.user_notes || '';
-      setEditState(true);
-      statusEl.textContent = `Editing control ${controlId}`;
-    }
-
-    async function deleteControl(controlId) {
-      if (!window.confirm('Delete this candidate control?')) {
-        return;
-      }
-      const runId = runIdEl.value.trim();
-      statusEl.textContent = 'Deleting control...';
-      try {
-        const resp = await fetch(buildUrl('run_candidate_controls', `id=${encodeURIComponent(controlId)}`), {
-          method: 'DELETE',
-        });
-        const result = await resp.json().catch(() => null);
-        if (!resp.ok) {
-          throw new Error(result?.error || resp.statusText || 'Delete failed');
-        }
-        statusEl.textContent = `Control deleted (${controlId}).`;
-        if (editingControlId === controlId) {
-          resetControlForm();
-        }
-        await loadControls(runId);
-        await loadCandidateSummary(runId);
+        await refreshWorkspaceData();
       } catch (error) {
-        statusEl.textContent = `Delete failed: ${error.message}`;
+        $('controlStatus').textContent = `Save failed: ${error.message}`;
       }
     }
-
     function resetControlForm() {
-      editingControlId = null;
-      document.getElementById('candidateTitle').value = '';
-      document.getElementById('candidateUrl').value = '';
-      document.getElementById('controlType').value = 'require_include';
-      document.getElementById('candidateReason').value = '';
-      document.getElementById('candidateNotes').value = '';
-      setEditState(false);
+      state.editingControlId = null;
+      $('candidateTitle').value = '';
+      $('candidateUrl').value = '';
+      $('controlType').value = 'require_include';
+      $('candidateReason').value = '';
+      $('candidateNotes').value = '';
+      $('btnSaveControl').textContent = 'Save Control';
+      $('btnCancelEdit').disabled = true;
     }
-
-    function setEditState(isEditing) {
-      cancelEditButton.disabled = !isEditing;
-      saveButton.textContent = isEditing ? 'Update Control' : 'Save Control';
+    function editControl(controlId) {
+      const control = state.controls.find(item => item.id === controlId);
+      if (!control) return;
+      state.editingControlId = controlId;
+      $('candidateTitle').value = control.title || '';
+      $('candidateUrl').value = control.steam_url || control.steam_appid || '';
+      $('controlType').value = control.control_type || 'require_include';
+      $('candidateReason').value = control.reason || '';
+      $('candidateNotes').value = control.user_notes || '';
+      $('btnSaveControl').textContent = 'Update Control';
+      $('btnCancelEdit').disabled = false;
+      $('controlStatus').textContent = `Editing ${control.title || controlId}`;
     }
-
-    async function listRuns() {
-      const organizationId = organizationIdForListEl.value.trim();
-      if (!organizationId) {
-        statusEl.textContent = 'Organization ID is required to list runs.';
-        return;
-      }
-      statusEl.textContent = 'Listing runs...';
-      const resp = await fetch(buildUrl('research_runs', `organization_id=${encodeURIComponent(organizationId)}`));
-      if (!resp.ok) {
-        const text = await resp.text();
-        statusEl.textContent = `Failed to list runs: ${text || resp.statusText}`;
-        return;
-      }
-      const runs = await resp.json();
-      runSelect.innerHTML = ['<option value="">Choose a run</option>', ...runs.map(run => `<option value="${run.id}">${run.name || run.id} (${run.current_stage || run.status || 'unknown'})</option>`)].join('');
-      statusEl.textContent = `Found ${runs.length} runs.`;
-      if (selectedRunEl) {
-        selectedRunEl.textContent = 'Selected run: none';
-      }
-      currentRun = null;
-      setRunLoadedState(false);
-    }
-
-    async function createRun() {
-      const gameId = newRunGameIdEl.value.trim();
-      const organizationId = organizationIdForListEl.value.trim();
-      const name = newRunNameEl.value.trim();
-      if (!gameId || !organizationId) {
-        statusEl.textContent = 'Game ID and Organization are required to create a run.';
-        return;
-      }
-      statusEl.textContent = 'Creating run...';
-      createRunButton.disabled = true;
+    async function deleteControl(controlId) {
+      if (!window.confirm('Delete this candidate control?')) return;
       try {
-        const resp = await fetch(buildUrl('research_runs'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ game_id: gameId, organization_id: organizationId, name }),
-        });
-        const text = await resp.text();
-        if (!resp.ok) {
-          statusEl.textContent = `Run creation failed: ${text || resp.statusText}`;
-          return;
-        }
-        let run = null;
-        try {
-          run = JSON.parse(text);
-        } catch {
-          statusEl.textContent = 'Run creation response could not be parsed.';
-          return;
-        }
-        if (Array.isArray(run)) {
-          run = run[0];
-        }
-        if (!run || !run.id) {
-          statusEl.textContent = `Run creation returned unexpected result: ${text}`;
-          return;
-        }
-        runIdEl.value = run.id;
-        organizationIdForListEl.value = run.organization_id || organizationId;
-        if (runSelect) {
-          const optionExists = Array.from(runSelect.options).some(opt => opt.value === run.id);
-          if (!optionExists) {
-            runSelect.insertAdjacentHTML('beforeend', `<option value="${run.id}">${run.name || run.id}</option>`);
-          }
-          runSelect.value = run.id;
-        }
-        statusEl.textContent = `Created run ${run.id}. Loading...`;
-        await loadRun();
-      } finally {
-        createRunButton.disabled = false;
-      }
-    }
-
-    runSelect.addEventListener('change', async () => {
-      const selectedId = runSelect.value;
-      if (selectedId) {
-        runIdEl.value = selectedId;
-        await loadRun();
-      }
-    });
-
-    organizationIdForListEl.addEventListener('change', async () => {
-      const organizationId = organizationIdForListEl.value.trim();
-      if (organizationId) {
-        await listRuns();
-      }
-    });
-
-    refreshControlsButton.addEventListener('click', async () => {
-      refreshStatusEl.textContent = 'Refreshing controls...';
-      await loadControls(runIdEl.value.trim());
-      refreshStatusEl.textContent = 'Controls refreshed.';
-    });
-
-    async function generateRunCandidates() {
-      const runId = runIdEl.value.trim();
-      if (!runId) {
-        statusEl.textContent = 'Run ID is required to generate run candidates.';
-        return;
-      }
-      if (!currentRun) {
-        statusEl.textContent = 'Load a run before generating candidates.';
-        return;
-      }
-
-      generateCandidatesButton.disabled = true;
-      statusEl.textContent = 'Generating run candidates...';
-      try {
-        const resp = await fetch(buildUrl('prepare_run_candidates'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ run_id: runId }),
-        });
-        const result = await resp.json().catch(() => null);
-        if (!resp.ok) {
-          throw new Error(result?.error || resp.statusText || 'Unknown error');
-        }
-        statusEl.textContent = `Generate complete: ${result.count ?? 0} candidates (${result.status}).`;
-        const lastEl = document.getElementById('lastGenerated');
-        if (lastEl) lastEl.textContent = `Last generated: ${new Date().toLocaleString()}`;
-        await loadControls(runId);
-        await loadCandidateSummary(runId);
+        await fetchJson('run_candidate_controls', `id=${encodeURIComponent(controlId)}`, { method: 'DELETE' });
+        $('controlStatus').textContent = 'Guidance deleted.';
+        await refreshWorkspaceData();
       } catch (error) {
-        statusEl.textContent = `Generate failed: ${error.message}`;
-      } finally {
-        generateCandidatesButton.disabled = false;
+        $('controlStatus').textContent = `Delete failed: ${error.message}`;
       }
     }
-
+    async function createRunEvent(eventType, message, stage = 'intake', details = {}) {
+      if (!state.currentRun) return null;
+      return fetchJson('run_events', '', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ run_id: state.currentRun.id, stage, event_type: eventType, message, details }),
+      });
+    }
+    async function markCandidateSetChanged(details = {}) {
+      if (!candidateSetApproved()) return;
+      await createRunEvent('candidate_set_changed_after_approval', 'Candidate selections or exclusions changed after approval', 'classification', details);
+    }
+    async function skipGuidance() {
+      if (!state.currentRun) return;
+      $('controlStatus').textContent = 'Skipping known games and guidance...';
+      try {
+        await createRunEvent('known_games_guidance_skipped', 'Known Games & Guidance skipped by user', 'discovery');
+        $('controlStatus').textContent = 'Known Games & Guidance skipped. You can still add guidance later.';
+        await refreshWorkspaceData();
+      } catch (error) {
+        $('controlStatus').textContent = `Skip failed: ${error.message}`;
+      }
+    }
+    async function applyControls() {
+      if (!state.currentRun) return;
+      $('actionStatus').textContent = 'Applying known games and guidance...';
+      try {
+        const result = await fetchJson('prepare_run_candidates', '', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ run_id: state.currentRun.id }) });
+        $('actionStatus').textContent = `Known games and guidance applied: ${result.count ?? 0} candidates (${result.status}).`;
+        await refreshWorkspaceData();
+      } catch (error) {
+        $('actionStatus').textContent = `Apply failed: ${error.message}`;
+      }
+    }
+    async function buildCandidateUniverse() {
+      if (!state.currentRun) return;
+      $('actionStatus').textContent = 'Building candidate universe. This may take a few minutes...';
+      $('btnBuildUniverse').disabled = true;
+      try {
+        const result = await fetchJson('build_candidate_universe', '', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ run_id: state.currentRun.id }) });
+        $('actionStatus').textContent = `Candidate universe built. Status: ${result.status}. Review, sort, filter, exclude, and confirm comps before generating reports.`;
+        await refreshWorkspaceData();
+        await refreshDashboard();
+      } catch (error) {
+        $('actionStatus').textContent = `Build failed: ${error.message}`;
+        await refreshWorkspaceData();
+      } finally {
+        $('btnBuildUniverse').disabled = false;
+      }
+    }
+    async function confirmCompsForReport() {
+      if (!state.currentRun) return;
+      if (!candidateUniverseBuilt()) {
+        $('actionStatus').textContent = 'Build the candidate universe before confirming comps for report.';
+        return;
+      }
+      try {
+        await createRunEvent('candidate_set_approved', 'Comps confirmed for report by user', 'classification', { selected_count: state.candidates.filter(c => c.is_selected_for_report).length });
+        $('actionStatus').textContent = 'Comps confirmed for report. Reports can now be generated.';
+        await refreshWorkspaceData();
+      } catch (error) {
+        $('actionStatus').textContent = `Confirmation failed: ${error.message}`;
+      }
+    }
+    async function generateReports() {
+      if (!state.currentRun) return;
+      if (!candidateSetApproved()) {
+        $('actionStatus').textContent = 'Confirm comps for report before generating reports.';
+        return;
+      }
+      $('actionStatus').textContent = 'Generating reports from selected candidates...';
+      $('btnGenerateReports').disabled = true;
+      try {
+        const result = await fetchJson('generate_reports', '', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ run_id: state.currentRun.id }) });
+        $('actionStatus').textContent = `Reports generated. Status: ${result.status}.`;
+        await refreshWorkspaceData();
+        await refreshDashboard();
+      } catch (error) {
+        $('actionStatus').textContent = `Report generation failed: ${error.message}`;
+        await refreshWorkspaceData();
+      } finally {
+        $('btnGenerateReports').disabled = false;
+      }
+    }
+    async function updateCandidate(candidateId, updates, changeReason) {
+      try {
+        await fetchJson('run_candidates', '', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: candidateId, updates }) });
+        await markCandidateSetChanged({ candidate_id: candidateId, updates, reason: changeReason });
+        $('actionStatus').textContent = changeReason;
+        await refreshWorkspaceData();
+      } catch (error) {
+        $('actionStatus').textContent = `Candidate update failed: ${error.message}`;
+      }
+    }
     async function runFullPipeline() {
-      const runId = runIdEl.value.trim();
-      if (!runId) {
-        statusEl.textContent = 'Run ID is required to run the pipeline.';
-        return;
-      }
-      if (!currentRun) {
-        statusEl.textContent = 'Load a run before running the pipeline.';
-        return;
-      }
-
-      runPipelineButton.disabled = true;
-      generateCandidatesButton.disabled = true;
-      statusEl.textContent = 'Running full pipeline. This may take a few minutes...';
+      if (!state.currentRun) return;
+      $('actionStatus').textContent = 'Running full research pipeline. This may take a few minutes...';
+      $('btnRunPipeline').disabled = true;
       try {
-        const resp = await fetch(buildUrl('run_research_pipeline'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ run_id: runId }),
-        });
-        const result = await resp.json().catch(() => null);
-        if (!resp.ok) {
-          throw new Error(result?.error || resp.statusText || 'Unknown error');
-        }
-        statusEl.textContent = `Pipeline complete: ${JSON.stringify(result)}`;
-        const lastEl = document.getElementById('lastGenerated');
-        if (lastEl) lastEl.textContent = `Last pipeline run: ${new Date().toLocaleString()}`;
-        await loadRun();
+        const result = await fetchJson('run_research_pipeline', '', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ run_id: state.currentRun.id }) });
+        $('actionStatus').textContent = `Pipeline complete: ${result.status}.`;
+        await refreshWorkspaceData();
+        await refreshDashboard();
       } catch (error) {
-        statusEl.textContent = `Pipeline failed: ${error.message}`;
+        $('actionStatus').textContent = `Pipeline failed: ${error.message}`;
+        await refreshWorkspaceData();
       } finally {
-        runPipelineButton.disabled = false;
-        generateCandidatesButton.disabled = false;
+        $('btnRunPipeline').disabled = false;
       }
     }
 
-    refreshSummaryButton.addEventListener('click', async () => {
-      refreshStatusEl.textContent = 'Refreshing candidate summary...';
-      await loadCandidateSummary(runIdEl.value.trim());
-      refreshStatusEl.textContent = 'Candidate summary refreshed.';
+    $('btnStartNew').addEventListener('click', () => { $('newRunPanel').classList.remove('hidden'); $('newRunPanel').scrollIntoView({ behavior: 'smooth' }); });
+    $('btnBrowseRuns').addEventListener('click', () => $('recentRunsSection').scrollIntoView({ behavior: 'smooth' }));
+    $('btnCancelNewRun').addEventListener('click', () => $('newRunPanel').classList.add('hidden'));
+    $('btnCreateResearchRun').addEventListener('click', createResearchRun);
+    $('btnRefreshRecent').addEventListener('click', refreshDashboard);
+    $('btnAdvancedRefreshRuns').addEventListener('click', refreshDashboard);
+    $('btnAdvancedLoad').addEventListener('click', () => openRun($('advancedRunId').value.trim()));
+    $('btnBackDashboard').addEventListener('click', () => switchMode('dashboard'));
+    $('btnWorkspaceRefresh').addEventListener('click', refreshWorkspaceData);
+    $('btnSaveControl').addEventListener('click', saveControl);
+    $('btnCancelEdit').addEventListener('click', resetControlForm);
+    $('btnSkipGuidance').addEventListener('click', skipGuidance);
+    $('btnApplyControls').addEventListener('click', applyControls);
+    $('btnBuildUniverse').addEventListener('click', buildCandidateUniverse);
+    $('btnConfirmComps').addEventListener('click', confirmCompsForReport);
+    $('btnGenerateReports').addEventListener('click', generateReports);
+    $('btnRunPipeline').addEventListener('click', runFullPipeline);
+    $('btnRefreshControls').addEventListener('click', refreshWorkspaceData);
+    $('btnRefreshSummary').addEventListener('click', refreshWorkspaceData);
+    $('btnRefreshReports').addEventListener('click', refreshWorkspaceData);
+    workspaceSelect.addEventListener('change', refreshDashboard);
+    runSearch.addEventListener('input', renderRecentRuns);
+    existingGameSelect.addEventListener('change', () => {
+      const game = state.games.find(item => item.id === existingGameSelect.value);
+      if (game) {
+        $('newGameTitle').value = game.title || '';
+        $('seedSteamInput').value = game.steam_appid || game.steam_url || '';
+      }
     });
-
-    refreshReportsButton.addEventListener('click', async () => {
-      refreshStatusEl.textContent = 'Refreshing reports...';
-      await loadReports(runIdEl.value.trim());
-      refreshStatusEl.textContent = 'Reports refreshed.';
+    recentRunsTable.addEventListener('click', event => {
+      const target = event.target;
+      if (target instanceof HTMLElement && target.classList.contains('open-run')) openRun(target.dataset.runId);
     });
-
-    document.getElementById('btnLoadRun').addEventListener('click', loadRun);
-    listRunsButton.addEventListener('click', listRuns);
-    refreshRunsButton.addEventListener('click', listRuns);
-    createRunButton.addEventListener('click', createRun);
-    saveButton.addEventListener('click', saveControl);
-    cancelEditButton.addEventListener('click', () => {
-      resetControlForm();
-      statusEl.textContent = 'Edit canceled.';
-    });
-    generateCandidatesButton.addEventListener('click', generateRunCandidates);
-    runPipelineButton.addEventListener('click', runFullPipeline);
-    controlsTable.addEventListener('click', async (event) => {
+    $('controlsTable').addEventListener('click', event => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
-      const controlId = target.dataset.id;
-      if (!controlId) return;
-      if (target.classList.contains('edit-control')) {
-        enterEditMode(controlId);
-      } else if (target.classList.contains('delete-control')) {
-        await deleteControl(controlId);
+      const id = target.dataset.id;
+      if (!id) return;
+      if (target.classList.contains('edit-control')) editControl(id);
+      if (target.classList.contains('delete-control')) deleteControl(id);
+    });
+    $('candidateFilters').addEventListener('click', event => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !target.dataset.filter) return;
+      state.candidateFilter = target.dataset.filter;
+      document.querySelectorAll('#candidateFilters button').forEach(btn => btn.classList.toggle('active', btn === target));
+      renderCandidateSummary();
+    });
+    $('candidateSearch').addEventListener('input', event => {
+      state.candidateSearch = event.target.value || '';
+      renderCandidateSummary();
+    });
+    $('candidateSort').addEventListener('change', event => {
+      state.candidateSort = event.target.value;
+      renderCandidateSummary();
+    });
+    $('candidateSortDirection').addEventListener('change', event => {
+      state.candidateSortDirection = event.target.value;
+      renderCandidateSummary();
+    });
+    $('summaryTable').addEventListener('click', event => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const candidateId = target.dataset.id;
+      if (!candidateId) return;
+      const candidate = state.candidates.find(item => item.candidate_id === candidateId);
+      if (!candidate) return;
+      if (target.classList.contains('toggle-selected')) {
+        const nextSelected = !candidate.is_selected_for_report;
+        updateCandidate(
+          candidateId,
+          {
+            is_selected_for_report: nextSelected,
+            is_shortlisted: nextSelected ? true : candidate.is_shortlisted,
+            is_user_excluded: nextSelected ? false : candidate.is_user_excluded,
+            pipeline_status: nextSelected ? 'selected_for_report' : (candidate.classification ? 'classified' : candidate.pipeline_status || 'scored'),
+          },
+          nextSelected ? 'Candidate selected for report.' : 'Candidate unselected from report.'
+        );
+      }
+      if (target.classList.contains('toggle-excluded')) {
+        const nextExcluded = !candidate.is_user_excluded;
+        updateCandidate(
+          candidateId,
+          {
+            is_user_excluded: nextExcluded,
+            is_selected_for_report: nextExcluded ? false : candidate.is_selected_for_report,
+            pipeline_status: nextExcluded ? 'excluded_by_user' : (candidate.classification ? 'classified' : 'scored'),
+            user_exclusion_reason: nextExcluded ? 'Excluded during human comp review.' : null,
+          },
+          nextExcluded ? 'Candidate excluded from report set.' : 'Candidate restored to candidate set.'
+        );
       }
     });
+    reportsList.addEventListener('click', async event => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const reportId = target.dataset.id;
+      if (!reportId) return;
+      const report = state.reports.find(item => item.id === reportId);
+      if (!report) return;
+      if (target.classList.contains('toggle-report')) {
+        const viewer = $(`report-${reportId}`);
+        viewer.classList.toggle('hidden');
+        target.textContent = viewer.classList.contains('hidden') ? 'Open' : 'Close';
+      }
+      if (target.classList.contains('copy-report')) {
+        await navigator.clipboard.writeText(report.content_md || '');
+        target.textContent = 'Copied';
+        setTimeout(() => target.textContent = 'Copy Markdown', 1200);
+      }
+      if (target.classList.contains('download-report')) {
+        const blob = new Blob([report.content_md || ''], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${(report.report_type || 'report').replace(/[^a-z0-9_-]/gi, '_')}_${report.id}.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    });
+
+    async function init() {
+      try {
+        await loadOrganizations();
+        await refreshDashboard();
+      } catch (error) {
+        globalStatus.textContent = `Dashboard failed to load: ${error.message}`;
+      }
+    }
+    init();
   </script>
 </body>
 </html>

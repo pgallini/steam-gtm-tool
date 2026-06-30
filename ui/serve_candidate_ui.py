@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from supabase.research_run_service import prepareRunCandidates, updateCandidateControl, deleteCandidateControl
-from supabase.research_pipeline import runResearchPipeline
+from supabase.research_pipeline import buildCandidateUniverse, generateReportsForRun, runResearchPipeline
 
 load_dotenv(dotenv_path=Path('.env'))
 
@@ -72,6 +72,18 @@ class CandidateUIHandler(SimpleHTTPRequestHandler):
     def handle_api_request(self, parsed):
         api_path = parsed.path[len('/api/'):]
         query = parse_qs(parsed.query)
+        if api_path == 'organizations':
+            response = proxy_request('GET', 'organizations', {'select': '*', 'order': 'name.asc'})
+            self.respond_proxy(response)
+            return
+        if api_path == 'games':
+            organization_id = query.get('organization_id', [''])[0]
+            params = {'select': '*', 'order': 'updated_at.desc'}
+            if organization_id:
+                params['organization_id'] = f'eq.{organization_id}'
+            response = proxy_request('GET', 'games', params)
+            self.respond_proxy(response)
+            return
         if api_path == 'research_runs':
             run_id = query.get('run_id', query.get('id', ['']))[0]
             if run_id:
@@ -83,6 +95,14 @@ class CandidateUIHandler(SimpleHTTPRequestHandler):
                 self.send_error(400, 'Missing run_id, id, or organization_id query parameter')
                 return
             response = proxy_request('GET', 'research_runs', {'select': '*', 'organization_id': f'eq.{organization_id}', 'order': 'created_at.desc'})
+            self.respond_proxy(response)
+            return
+        if api_path == 'run_events':
+            run_id = query.get('run_id', [''])[0]
+            if not run_id:
+                self.send_error(400, 'Missing run_id query parameter')
+                return
+            response = proxy_request('GET', 'run_events', {'select': '*', 'run_id': f'eq.{run_id}', 'order': 'created_at.desc', 'limit': query.get('limit', ['20'])[0]})
             self.respond_proxy(response)
             return
         if api_path == 'run_candidate_controls':
@@ -159,6 +179,87 @@ class CandidateUIHandler(SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({'error': str(exc)}).encode('utf-8'))
             return
+        if parsed.path == '/api/build_candidate_universe':
+            length = int(self.headers.get('Content-Length', 0))
+            payload = json.loads(self.rfile.read(length).decode('utf-8'))
+            run_id = payload.get('run_id')
+            if not run_id:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Missing run_id'}).encode('utf-8'))
+                return
+            try:
+                result = buildCandidateUniverse(run_id)
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(result).encode('utf-8'))
+            except Exception as exc:
+                print(f'Build candidate universe error: {exc}')
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(exc)}).encode('utf-8'))
+            return
+        if parsed.path == '/api/generate_reports':
+            length = int(self.headers.get('Content-Length', 0))
+            payload = json.loads(self.rfile.read(length).decode('utf-8'))
+            run_id = payload.get('run_id')
+            if not run_id:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Missing run_id'}).encode('utf-8'))
+                return
+            try:
+                result = generateReportsForRun(run_id)
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(result).encode('utf-8'))
+            except Exception as exc:
+                print(f'Generate reports error: {exc}')
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(exc)}).encode('utf-8'))
+            return
+        if parsed.path == '/api/run_events':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                payload = json.loads(self.rfile.read(length).decode('utf-8'))
+            except json.JSONDecodeError:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Invalid JSON body'}).encode('utf-8'))
+                return
+            response = proxy_request('POST', 'run_events', json_body=payload, extra_headers={'Prefer': 'return=representation'})
+            self.respond_proxy(response)
+            return
+        if parsed.path == '/api/games':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                payload = json.loads(self.rfile.read(length).decode('utf-8'))
+            except json.JSONDecodeError:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Invalid JSON body'}).encode('utf-8'))
+                return
+            steam_appid = payload.get('steam_appid')
+            if steam_appid:
+                steam_app_response = ensure_steam_app(int(steam_appid), payload.get('title'))
+                if steam_app_response.status_code not in (200, 201):
+                    self.send_response(500)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'error': 'Failed to ensure steam_app record', 'details': steam_app_response.text}).encode('utf-8'))
+                    return
+            response = proxy_request('POST', 'games', json_body=payload, extra_headers={'Prefer': 'return=representation'})
+            self.respond_proxy(response)
+            return
         if parsed.path == '/api/research_runs':
             try:
                 length = int(self.headers.get('Content-Length', 0))
@@ -199,6 +300,27 @@ class CandidateUIHandler(SimpleHTTPRequestHandler):
 
     def do_PATCH(self):
         parsed = urlparse(self.path)
+        if parsed.path == '/api/run_candidates':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                payload = json.loads(self.rfile.read(length).decode('utf-8'))
+            except json.JSONDecodeError:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Invalid JSON body'}).encode('utf-8'))
+                return
+            candidate_id = payload.get('id')
+            updates = payload.get('updates') or {k: v for k, v in payload.items() if k != 'id'}
+            if not candidate_id or not updates:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Missing candidate id or update fields'}).encode('utf-8'))
+                return
+            response = proxy_request('PATCH', 'run_candidates', {'id': f'eq.{candidate_id}'}, json_body=updates, extra_headers={'Prefer': 'return=representation'})
+            self.respond_proxy(response)
+            return
         if parsed.path == '/api/run_candidate_controls':
             try:
                 length = int(self.headers.get('Content-Length', 0))

@@ -599,16 +599,94 @@ def generate_competitor_report(run_id: str) -> dict[str, Any]:
     return {'report_id': report.get('id') if report else None, 'selected_candidate_count': len(selected), 'candidate_count': len(rows)}
 
 
-def runResearchPipeline(run_id: str) -> dict[str, Any]:
+def latest_event_at(run_id: str, event_type: str) -> str | None:
+    events = client.select('run_events', '*', {'run_id': f'eq.{run_id}', 'event_type': f'eq.{event_type}', 'order': 'created_at.desc', 'limit': '1'})
+    if not events:
+        return None
+    return events[0].get('created_at')
+
+
+def candidateSetIsApproved(run_id: str) -> bool:
+    approved_at = latest_event_at(run_id, 'candidate_set_approved')
+    if not approved_at:
+        return False
+    changed_at = latest_event_at(run_id, 'candidate_set_changed_after_approval')
+    return not changed_at or changed_at <= approved_at
+
+
+def buildCandidateUniverse(run_id: str) -> dict[str, Any]:
+    """User-facing pipeline action: build and classify the candidate universe, but do not generate reports."""
     started = utc_now_iso()
-    addRunEvent(run_id, 'intake', 'pipeline_started', 'Full research pipeline started')
+    addRunEvent(run_id, 'discovery', 'candidate_universe_started', 'Build Candidate Universe started')
     try:
         prepare_result = prepareRunCandidates(run_id)
         enrich_result = enrich_run(run_id)
         score_result = score_run(run_id)
         classify_result = classify_run('rule_based_v1', run_id)
+        client.update(
+            'research_runs',
+            {'id': f'eq.{run_id}'},
+            {
+                'status': 'needs_review',
+                'current_stage': 'classification',
+                'started_at': started,
+                'failure_message': None,
+            },
+            returning='minimal',
+        )
+        addRunEvent(run_id, 'classification', 'candidate_universe_completed', 'Build Candidate Universe completed; candidates are ready for review')
+        return {
+            'status': 'needs_review',
+            'prepare': prepare_result,
+            'enrichment': enrich_result,
+            'scoring': score_result,
+            'classification': classify_result,
+        }
+    except Exception as exc:
+        client.update(
+            'research_runs',
+            {'id': f'eq.{run_id}'},
+            {'status': 'failed', 'failure_message': str(exc), 'failed_at': utc_now_iso()},
+            returning='minimal',
+        )
+        addRunEvent(run_id, 'classification', 'candidate_universe_failed', 'Build Candidate Universe failed', {'error': str(exc)})
+        raise
+
+
+def generateReportsForRun(run_id: str, require_approval: bool = True) -> dict[str, Any]:
+    """User-facing pipeline action: generate final reports from reviewed/selected candidates."""
+    if require_approval and not candidateSetIsApproved(run_id):
+        raise RuntimeError('Candidate set must be approved before reports can be generated.')
+    addRunEvent(run_id, 'report_generation', 'reports_started', 'Generate Reports started')
+    try:
         report_result = generate_competitor_report(run_id)
         review_result = runReviewPipeline(run_id)
+        client.update(
+            'research_runs',
+            {'id': f'eq.{run_id}'},
+            {'status': 'completed', 'current_stage': 'completed', 'completed_at': utc_now_iso(), 'failure_message': None},
+            returning='minimal',
+        )
+        addRunEvent(run_id, 'completed', 'reports_completed', 'Generate Reports completed')
+        return {'status': 'completed', 'report': report_result, 'reviews': review_result}
+    except Exception as exc:
+        client.update(
+            'research_runs',
+            {'id': f'eq.{run_id}'},
+            {'status': 'failed', 'failure_message': str(exc), 'failed_at': utc_now_iso()},
+            returning='minimal',
+        )
+        addRunEvent(run_id, 'report_generation', 'reports_failed', 'Generate Reports failed', {'error': str(exc)})
+        raise
+
+
+def runResearchPipeline(run_id: str) -> dict[str, Any]:
+    started = utc_now_iso()
+    addRunEvent(run_id, 'intake', 'pipeline_started', 'Full research pipeline started')
+    try:
+        universe_result = buildCandidateUniverse(run_id)
+        addRunEvent(run_id, 'classification', 'selected_candidates_approved', 'Selected candidates approved automatically by full pipeline admin action')
+        reports_result = generateReportsForRun(run_id, require_approval=False)
         client.update(
             'research_runs',
             {'id': f'eq.{run_id}'},
@@ -618,12 +696,8 @@ def runResearchPipeline(run_id: str) -> dict[str, Any]:
         addRunEvent(run_id, 'completed', 'pipeline_completed', 'Full research pipeline completed')
         return {
             'status': 'completed',
-            'prepare': prepare_result,
-            'enrichment': enrich_result,
-            'scoring': score_result,
-            'classification': classify_result,
-            'report': report_result,
-            'reviews': review_result,
+            'universe': universe_result,
+            'reports': reports_result,
         }
     except Exception as exc:
         client.update(
