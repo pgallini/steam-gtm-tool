@@ -6,100 +6,152 @@
   <title>Steam GTM Research</title>
   <style>
     :root {
-      --bg: #f6f7fb;
-      --card: #ffffff;
-      --border: #d9deea;
-      --muted: #667085;
-      --text: #182230;
-      --primary: #3157d5;
-      --primary-dark: #2442a6;
-      --success: #067647;
+      --bg: #F7F8FB;
+      --card: #FFFFFF;
+      --muted-surface: #F1F3F7;
+      --border: #DDE2EA;
+      --border-strong: #C7CEDA;
+      --text: #172033;
+      --muted: #5F6B7A;
+      --subtle: #7A8698;
+      --primary: #5A3A88;
+      --primary-dark: #4A2F73;
+      --primary-soft: #F1ECF8;
+      --primary-border: #D8C8EE;
+      --on-primary: #FFFFFF;
+      --success: #12794D;
+      --success-soft: #E8F5EF;
+      --success-border: #A8D9C2;
       --danger: #b42318;
+      --danger-soft: #fffbfa;
+      --danger-border: #fecdca;
       --warn: #b54708;
-      --soft: #eef4ff;
+      --warn-soft: #fffaeb;
+      --warn-border: #fedf89;
+      --soft: var(--primary-soft);
     }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: Arial, sans-serif; color: var(--text); background: var(--bg); }
-    header { background: var(--card); border-bottom: 1px solid var(--border); padding: 22px 28px; display: flex; gap: 18px; justify-content: space-between; align-items: flex-start; }
-    h1, h2, h3 { margin: 0 0 8px; }
+    body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; color: var(--text); background: var(--bg); }
+    header { background: var(--card); border-bottom: 1px solid var(--border); padding: 20px 28px; display: flex; gap: 18px; justify-content: space-between; align-items: flex-start; }
+    h1, h2, h3 { margin: 0 0 8px; font-weight: 750; letter-spacing: -0.02em; }
+    h1 { font-size: 28px; line-height: 1.15; }
+    h2 { font-size: 20px; line-height: 1.25; }
+    h3 { font-size: 15px; line-height: 1.3; }
     p { margin: 6px 0; }
     main { padding: 24px 28px 60px; max-width: 1600px; margin: 0 auto; }
-    label { display: block; margin-top: 12px; font-weight: 700; font-size: 13px; }
+    label { display: block; margin-top: 12px; font-weight: 700; font-size: 13px; color: var(--text); }
     input, select, textarea, button { font: inherit; }
-    input, select, textarea { width: 100%; margin-top: 5px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+    input, select, textarea { width: 100%; min-height: 40px; margin-top: 5px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); color: var(--text); }
+    input:focus, select:focus, textarea:focus { outline: 3px solid var(--primary-soft); border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary-border); }
     textarea { resize: vertical; }
-    button { border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; background: #fff; cursor: pointer; }
+    button, .btn { min-height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; background: var(--card); color: var(--text); cursor: pointer; font-weight: 650; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
     button:disabled { cursor: not-allowed; opacity: 0.55; }
-    table { width: 100%; border-collapse: collapse; margin-top: 12px; background: #fff; }
-    th, td { padding: 9px 10px; border-bottom: 1px solid #edf0f6; text-align: left; vertical-align: top; font-size: 13px; }
-    th { background: #f8f9fc; color: #344054; font-weight: 700; position: sticky; top: 0; z-index: 1; }
+    .btn-primary, .primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 750; }
+    .btn-primary:hover, .primary:hover { background: var(--primary-dark); border-color: var(--primary-dark); }
+    .btn-secondary, .secondary { background: var(--card); border-color: var(--border-strong); color: var(--text); }
+    .btn-secondary:hover, .secondary:hover { background: var(--muted-surface); }
+    .btn-ghost { background: transparent; border-color: transparent; color: var(--primary); }
+    .btn-ghost:hover { background: var(--primary-soft); border-color: var(--primary-border); }
+    .btn-danger { background: var(--danger-soft); border-color: var(--danger-border); color: var(--danger); }
+    .btn-danger:hover { background: var(--danger-soft); border-color: var(--danger); }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; background: var(--card); }
+    th, td { padding: 9px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; font-size: 13px; }
+    th { background: var(--muted-surface); color: var(--muted); font-size: 12px; text-transform: none; font-weight: 750; position: sticky; top: 0; z-index: 1; }
+    tbody tr:hover { background: #FAFBFD; }
     .subhead { color: var(--muted); max-width: 760px; }
+    .header-main { min-width: 0; }
+    .header-title-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .header-actions { display: flex; gap: 14px; align-items: flex-start; justify-content: flex-end; }
+    .header-back { padding: 7px 10px; }
     .workspace-select { min-width: 230px; }
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px; box-shadow: 0 1px 2px rgba(23,32,51,.04); }
     .grid { display: grid; gap: 16px; }
     .two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .three-col { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .dashboard-actions { margin: 22px 0 18px; }
-    .action-card { padding: 22px; border: 1px solid var(--border); border-radius: 14px; background: #fff; }
+    .action-card { padding: 22px; border: 1px solid var(--border); border-radius: 16px; background: var(--card); }
     .action-card p { color: var(--muted); min-height: 42px; }
-    .primary { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 700; }
-    .primary:hover { background: var(--primary-dark); }
-    .secondary { background: #fff; color: var(--text); }
     .linkish { border: 0; background: transparent; color: var(--primary); padding: 0; }
     .status { font-size: 13px; color: var(--muted); }
+    #globalStatus:empty { display: none; }
     .status.ok { color: var(--success); }
     .status.error, .error-box { color: var(--danger); }
-    .error-box { border: 1px solid #fecdca; background: #fffbfa; padding: 12px; border-radius: 10px; margin-top: 10px; }
+    .error-box { border: 1px solid var(--danger-border); background: var(--danger-soft); padding: 12px; border-radius: 10px; margin-top: 10px; }
     .mode { display: none; }
     .mode.active { display: block; }
     .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     .toolbar > * { width: auto; }
-    .pill { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border); border-radius: 999px; padding: 4px 8px; font-size: 12px; background: #fff; white-space: nowrap; }
-    .pill.completed { border-color: #abefc6; background: #ecfdf3; color: #067647; }
-    .pill.running { border-color: #fedf89; background: #fffaeb; color: #b54708; }
-    .pill.failed { border-color: #fecdca; background: #fffbfa; color: #b42318; }
+    .pill { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border); border-radius: 999px; padding: 4px 8px; font-size: 12px; background: var(--muted-surface); color: var(--muted); white-space: nowrap; }
+    .pill.completed { border-color: var(--success-border); background: var(--success-soft); color: var(--success); }
+    .pill.running { border-color: var(--warn-border); background: var(--warn-soft); color: var(--warn); }
+    .pill.failed { border-color: var(--danger-border); background: var(--danger-soft); color: var(--danger); }
+    .badge { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; font-size: 12px; line-height: 1.25; font-weight: 700; background: var(--muted-surface); color: var(--muted); white-space: nowrap; }
+    .badge-purple { background: var(--primary-soft); border-color: var(--primary-border); color: var(--primary); }
+    .badge-blue { background: #EEF6FF; border-color: #B9D9FF; color: #175CD3; }
+    .badge-amber { background: var(--warn-soft); border-color: var(--warn-border); color: var(--warn); }
+    .badge-green { background: var(--success-soft); border-color: var(--success-border); color: var(--success); }
+    .badge-gray { background: var(--muted-surface); border-color: var(--border-strong); color: var(--muted); }
+    .badge-red { background: var(--danger-soft); border-color: var(--danger-border); color: var(--danger); }
+    .include-toggle { min-width: 112px; min-height: 34px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 750; }
+    .include-toggle.is-included { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+    .include-toggle.not-included { background: var(--card); border-color: var(--border-strong); color: var(--muted); }
+    .include-toggle.saving { opacity: 0.7; }
+    .include-toggle:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(90, 58, 136, 0.20); }
+    .table-col-included { width: 150px; min-width: 150px; }
+    .candidate-title { font-size: 14px; font-weight: 750; color: var(--text); }
+    .title-cell-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .stepper { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
-    .step { border: 1px solid var(--border); border-radius: 10px; padding: 10px; background: #fff; }
+    .step { border: 1px solid var(--border); border-radius: 12px; padding: 10px; background: var(--card); }
     .step strong { display: block; font-size: 13px; }
     .step span { color: var(--muted); font-size: 12px; }
-    .step.completed { background: #ecfdf3; border-color: #abefc6; }
-    .step.running { background: #fffaeb; border-color: #fedf89; }
-    .step.failed { background: #fffbfa; border-color: #fecdca; }
+    .step.completed { background: var(--success-soft); border-color: var(--success-border); }
+    .step.running { background: var(--warn-soft); border-color: var(--warn-border); }
+    .step.failed { background: var(--danger-soft); border-color: var(--danger-border); }
+    .step.skipped { background: var(--muted-surface); border-color: var(--border-strong); }
+    .step.active { outline: 2px solid var(--primary); background: var(--primary-soft); border-color: var(--primary-border); }
+    .step { cursor: pointer; }
     .loaded-run { margin-bottom: 16px; }
-    .metric-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
-    .metric { border: 1px solid #edf0f6; border-radius: 10px; padding: 10px; background: #fcfcfd; }
-    .metric b { display: block; font-size: 18px; }
-    .help { background: var(--soft); border: 1px solid #c7d7fe; border-radius: 10px; padding: 10px 12px; color: #344054; font-size: 13px; margin-top: 10px; }
+    .loaded-run h2 { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+    .loaded-run-title { font-size: inherit; font-weight: inherit; color: inherit; }
+    .run-detail-grid { display: grid; gap: 4px; margin-top: 8px; }
+    .run-detail-line { color: var(--text); font-size: 14px; }
+    .run-detail-line.compact { color: var(--muted); font-size: 12px; }
+    .help { background: var(--primary-soft); border: 1px solid var(--primary-border); border-radius: 10px; padding: 10px 12px; color: var(--text); font-size: 13px; margin-top: 10px; }
     .control-help { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
-    .control-help div { border: 1px solid #edf0f6; border-radius: 8px; padding: 8px; font-size: 12px; background: #fcfcfd; }
+    .control-help div { border: 1px solid var(--border); border-radius: 8px; padding: 8px; font-size: 12px; background: var(--muted-surface); }
     .section { margin-top: 18px; }
     .full-width { grid-column: 1 / -1; }
-    .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 12px; margin-top: 12px; max-height: 620px; background: #fff; }
+    .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 12px; margin-top: 12px; max-height: 620px; background: var(--card); }
     .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-    .filters button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
-    .report-card { border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-top: 12px; background: #fff; }
-    .report-viewer { white-space: pre-wrap; max-height: 420px; overflow: auto; background: #101828; color: #f8f9fc; padding: 14px; border-radius: 10px; margin-top: 10px; }
+    .filters button.active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+    .report-card { border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-top: 12px; background: var(--card); }
+    .report-viewer { white-space: pre-wrap; max-height: 420px; overflow: auto; background: var(--primary-dark); color: var(--on-primary); padding: 14px; border-radius: 10px; margin-top: 10px; }
     details.advanced { margin-top: 20px; }
     details.advanced summary { cursor: pointer; font-weight: 700; }
     .hidden { display: none !important; }
     .small { font-size: 12px; }
     @media (max-width: 1000px) {
       .two-col, .three-col, .stepper { grid-template-columns: 1fr; }
-      .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       header { display: block; }
+      .header-actions { justify-content: flex-start; margin-top: 12px; }
       .workspace-select { margin-top: 12px; }
     }
   </style>
 </head>
 <body>
   <header>
-    <div>
-      <h1>Steam GTM Research</h1>
+    <div class="header-main">
+      <div class="header-title-row">
+        <h1>Steam GTM Research</h1>
+      </div>
       <p class="subhead">Research competitors, audience signals, and positioning opportunities for a Steam game.</p>
     </div>
-    <div class="workspace-select">
-      <label for="workspaceSelect">Workspace</label>
-      <select id="workspaceSelect"><option value="">Loading workspaces...</option></select>
+    <div class="header-actions">
+      <button id="btnBackDashboard" class="btn btn-secondary header-back hidden">← Back to Dashboard</button>
+      <div id="workspaceSelectorWrap" class="workspace-select">
+        <label for="workspaceSelect">Workspace</label>
+        <select id="workspaceSelect"><option value="">Loading workspaces...</option></select>
+      </div>
     </div>
   </header>
 
@@ -111,12 +163,12 @@
         <div class="action-card">
           <h2>Start New Research Run</h2>
           <p>Create a new analysis for a Steam game.</p>
-          <button id="btnStartNew" class="primary">Start New Run</button>
+          <button id="btnStartNew" class="btn btn-primary">Start New Run</button>
         </div>
         <div class="action-card">
           <h2>Review Existing Research Run</h2>
           <p>Open a saved run, adjust candidates, continue the pipeline, or view reports.</p>
-          <button id="btnBrowseRuns" class="secondary">Browse Runs</button>
+          <button id="btnBrowseRuns" class="btn btn-secondary">Browse Runs</button>
         </div>
       </div>
 
@@ -150,8 +202,8 @@
           </div>
         </div>
         <div class="toolbar" style="margin-top:14px;">
-          <button id="btnCreateResearchRun" class="primary">Create Research Run</button>
-          <button id="btnCancelNewRun">Cancel</button>
+          <button id="btnCreateResearchRun" class="btn btn-primary">Create Research Run</button>
+          <button id="btnCancelNewRun" class="btn btn-secondary">Cancel</button>
         </div>
         <p id="newRunStatus" class="status"></p>
       </section>
@@ -162,7 +214,7 @@
             <h2>Recent Research Runs</h2>
             <p class="status">Open a previous run without needing a UUID.</p>
           </div>
-          <button id="btnRefreshRecent" class="secondary">Refresh Runs</button>
+          <button id="btnRefreshRecent" class="btn btn-secondary">Refresh Runs</button>
         </div>
         <label for="runSearch">Search</label>
         <input id="runSearch" placeholder="Search by game, run name, or status..." />
@@ -199,129 +251,59 @@
           </div>
         </div>
         <div class="toolbar" style="margin-top:12px;">
-          <button id="btnAdvancedLoad">Load Run ID</button>
-          <button id="btnAdvancedRefreshRuns">Refresh Runs</button>
+          <button id="btnAdvancedLoad" class="btn btn-secondary">Load Run ID</button>
+          <button id="btnAdvancedRefreshRuns" class="btn btn-secondary">Refresh Runs</button>
         </div>
       </details>
     </section>
 
     <section id="workspaceMode" class="mode">
-      <div class="toolbar" style="margin-bottom:14px;">
-        <button id="btnBackDashboard">← Back to Dashboard</button>
-        <button id="btnWorkspaceRefresh">Refresh Workspace</button>
-      </div>
-
       <section class="card loaded-run">
         <div class="toolbar" style="justify-content:space-between;">
           <div>
-            <h2>Loaded Run</h2>
-            <p id="loadedRunTitle" class="status">No run loaded.</p>
+            <h2>Loaded Run: <span id="loadedRunTitle" class="loaded-run-title">No run loaded</span></h2>
           </div>
-          <span id="loadedRunStatusPill" class="pill">not loaded</span>
+          <div class="toolbar">
+            <span id="loadedRunStatusPill" class="pill">not loaded</span>
+          </div>
         </div>
         <div id="loadedRunDetails"></div>
-        <div class="metric-grid">
-          <div class="metric"><b id="metricControls">0</b><span>Guidance</span></div>
-          <div class="metric"><b id="metricCandidates">0</b><span>Candidates</span></div>
-          <div class="metric"><b id="metricRequired">0</b><span>Required</span></div>
-          <div class="metric"><b id="metricBenchmarks">0</b><span>Benchmarks</span></div>
-          <div class="metric"><b id="metricExcluded">0</b><span>Excluded</span></div>
-          <div class="metric"><b id="metricReports">0</b><span>Reports</span></div>
-        </div>
       </section>
 
       <section class="card section">
-        <h2>Research Workflow</h2>
+        <div class="toolbar" style="justify-content:space-between;">
+          <h2>Research Workflow</h2>
+          <button id="btnShowBackendDetails" class="btn btn-secondary">View Backend Run Details</button>
+        </div>
         <div id="stepper" class="stepper"></div>
       </section>
 
-      <section class="card section">
-        <h2>Build Candidate Universe</h2>
-        <p class="help"><strong>Build Candidate Universe</strong> applies known game guidance, discovers candidates, enriches metadata, and filters/scores/classifies candidates. Reports are generated after candidate review.</p>
-        <div class="toolbar" style="margin-top:12px;">
-          <button id="btnBuildUniverse" class="primary">Build Candidate Universe</button>
-          <button id="btnApplyControls">Apply Known Games & Guidance</button>
-          <button id="btnConfirmComps" class="primary">Confirm Comps for Report</button>
-          <button id="btnGenerateReports">Generate Reports</button>
-          <button id="btnRefreshSummary">Refresh Candidate Summary</button>
-          <button id="btnRefreshReports">Refresh Reports</button>
-          <button id="btnRefreshControls">Refresh Guidance</button>
+      <section class="card section" id="activeStepSection">
+        <div class="toolbar" style="justify-content:space-between;">
+          <div>
+            <h2 id="activeStepTitle">Recommended Next Action</h2>
+            <p id="activeStepHelp" class="status">Load a run to see the next step.</p>
+          </div>
+          <span id="activeStepStatus" class="pill">not loaded</span>
         </div>
-        <p class="help"><strong>Apply Known Games & Guidance</strong> converts required, excluded, benchmark, and watchlist guidance into run candidate records. This does not discover, score, classify, or generate reports.</p>
+        <div id="activeStepPanel" style="margin-top:14px;"></div>
         <p id="actionStatus" class="status"></p>
       </section>
 
-      <section class="card section">
-        <h2>Run Progress</h2>
-        <p><strong>Current Stage:</strong> <span id="progressStage">—</span> · <strong>Status:</strong> <span id="progressStatus">—</span></p>
+      <section id="runProgressPanel" class="card section hidden">
+        <div class="toolbar" style="justify-content:space-between;">
+          <h2>Run Progress</h2>
+          <button id="btnHideBackendDetails" class="btn btn-secondary">Hide</button>
+        </div>
+        <p><strong>Latest Backend Stage:</strong> <span id="progressStage">—</span> · <strong>Status:</strong> <span id="progressStatus">—</span></p>
         <div id="runErrorBox" class="error-box hidden"></div>
         <h3 style="margin-top:14px;">Recent Activity</h3>
         <ul id="eventsList" class="status"><li>No events loaded.</li></ul>
       </section>
 
-      <section class="card section">
-        <h2>Step 2: Known Games & Guidance</h2>
-        <p>Use known games and guidance to tell the system which games must be considered, excluded, or treated as benchmarks. This step is optional.</p>
-        <div class="toolbar" style="margin-top:10px;">
-          <button id="btnSkipGuidance">Skip Guidance</button>
-        </div>
-        <div class="control-help">
-          <div><strong>Required Include</strong><br />Force this game into the analysis and final consideration.</div>
-          <div><strong>Must Consider</strong><br />Ensure this game is evaluated by the system.</div>
-          <div><strong>Exclude</strong><br />Do not include this game in scoring, classification, or reports.</div>
-          <div><strong>Benchmark Only</strong><br />Use for commercial/scope comparison, not necessarily as a direct comp.</div>
-          <div><strong>Watchlist</strong><br />Track as interesting, but do not force into the report.</div>
-          <div><strong>Note Only</strong><br />Store context without changing pipeline behavior.</div>
-        </div>
-        <div class="grid two-col" style="margin-top:12px;">
-          <div>
-            <label for="candidateTitle">Title</label>
-            <input id="candidateTitle" />
-          </div>
-          <div>
-            <label for="candidateUrl">Steam App ID or Steam Store URL</label>
-            <input id="candidateUrl" placeholder="e.g. 2288470 or https://store.steampowered.com/app/2288470/" />
-          </div>
-          <div>
-            <label for="controlType">Control Type</label>
-            <select id="controlType">
-              <option value="require_include">Required Include</option>
-              <option value="must_consider">Must Consider</option>
-              <option value="exclude">Exclude</option>
-              <option value="benchmark_only">Benchmark Only</option>
-              <option value="watchlist">Watchlist</option>
-              <option value="note_only">Note Only</option>
-            </select>
-          </div>
-          <div>
-            <label for="candidateReason">Reason</label>
-            <input id="candidateReason" />
-          </div>
-          <div class="full-width">
-            <label for="candidateNotes">User Notes</label>
-            <textarea id="candidateNotes" rows="3"></textarea>
-          </div>
-        </div>
-        <div class="toolbar" style="margin-top:12px;">
-          <button id="btnSaveControl" class="primary">Save Control</button>
-          <button id="btnCancelEdit">Cancel Edit</button>
-        </div>
-        <p id="controlStatus" class="status"></p>
-        <h3 style="margin-top:16px;">Saved Known Games & Guidance</h3>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Title</th><th>Steam App ID</th><th>Control Type</th><th>Reason</th><th>User Notes</th><th>Created At</th><th>Actions</th></tr>
-            </thead>
-            <tbody id="controlsTable"><tr><td colspan="7">No run loaded.</td></tr></tbody>
-          </table>
-        </div>
-      </section>
-
       <section class="card section full-width">
-        <h2>Step 4: Review, Sort, Filter & Exclude Comps</h2>
-        <p class="status">Sort, filter, select/unselect, and exclude comps before confirming the set for reports.</p>
-        <div id="approvalNotice" class="help">Candidate set is not approved yet. Confirm comps before generating reports.</div>
+        <h2>Candidate Summary</h2>
+        <p class="status">Supporting workspace for reviewing, sorting, filtering, and choosing which comps are included in reports.</p>
         <div class="toolbar" style="margin-top:12px;">
           <label style="margin-top:0;">Search <input id="candidateSearch" placeholder="Search title, source, classification, reasoning..." /></label>
           <label style="margin-top:0;">Sort
@@ -343,26 +325,29 @@
         </div>
         <div class="filters" id="candidateFilters">
           <button data-filter="all" class="active">All</button>
-          <button data-filter="required">Required</button>
-          <button data-filter="benchmarks">Benchmarks</button>
+          <button data-filter="included">Included in Report</button>
+          <button data-filter="not_included">Not Included</button>
+          <button data-filter="known">Known Games</button>
           <button data-filter="discovered">Discovered</button>
-          <button data-filter="selected">Selected for Report</button>
-          <button data-filter="excluded">Excluded / Noise</button>
+          <button data-filter="direct">Direct Comps</button>
+          <button data-filter="audience">Audience Comps</button>
+          <button data-filter="benchmarks">Benchmarks</button>
+          <button data-filter="low_fit">Low Fit</button>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Actions</th><th>Rank</th><th>Title</th><th>Steam App ID</th><th>Source</th><th>Control</th><th>Status</th><th>Reviews</th><th>Fit</th><th>Classification</th><th>Confidence</th><th>Required</th><th>Benchmark</th><th>Excluded</th><th>Selected</th><th>Reasoning / Notes</th>
+                <th class="table-col-included" title="Only included comps are used when reports are generated.">Included in Report?</th><th>Rank</th><th>Title</th><th>Source</th><th>Status</th><th>Reviews</th><th>Fit</th><th>Classification</th><th>Confidence</th><th>Reasoning / Notes</th>
               </tr>
             </thead>
-            <tbody id="summaryTable"><tr><td colspan="16">No run loaded.</td></tr></tbody>
+            <tbody id="summaryTable"><tr><td colspan="10">No run loaded.</td></tr></tbody>
           </table>
         </div>
       </section>
 
       <section class="card section">
-        <h2>Step 5: Generate Reports</h2>
+        <h2>Reports</h2>
         <p class="status">Reports are the final outputs. Open, copy, or download markdown.</p>
         <div id="reportsList">No reports loaded.</div>
       </section>
@@ -370,7 +355,7 @@
       <details class="advanced card section">
         <summary>Advanced / Admin Actions</summary>
         <p class="status">Run Full Pipeline is retained for admin/dev use. It bypasses the normal user checkpoint between candidate review and report generation.</p>
-        <button id="btnRunPipeline">Run Full Pipeline</button>
+        <button id="btnRunPipeline" class="btn btn-secondary">Run Full Pipeline</button>
       </details>
     </section>
   </main>
@@ -401,8 +386,16 @@
 
     const state = {
       organizations: [], games: [], runs: [], recentRows: [], currentRun: null, currentGame: null,
-      controls: [], candidates: [], reports: [], events: [], candidateFilter: 'all', candidateSearch: '', candidateSort: 'final_rank', candidateSortDirection: 'asc', editingControlId: null,
+      controls: [], candidates: [], reports: [], events: [], candidateFilter: 'all', candidateSearch: '', candidateSort: 'final_rank', candidateSortDirection: 'asc', editingControlId: null, activeStep: null, expandedCandidateId: null, pendingCandidateIds: new Set(),
     };
+
+    const workflowSteps = [
+      { key: 'setup', name: 'Research Setup', stages: ['intake'] },
+      { key: 'guidance', name: 'Known Games & Guidance', stages: ['discovery'] },
+      { key: 'universe', name: 'Build Candidate Universe', stages: ['page_signals', 'discovery', 'enrichment', 'filtering', 'scoring', 'shortlisting', 'classification'] },
+      { key: 'review', name: 'Review, Sort, Filter & Exclude Comps', stages: ['classification'] },
+      { key: 'reports', name: 'Generate Reports', stages: ['report_generation', 'review_collection', 'review_analysis', 'completed'] },
+    ];
 
     const $ = (id) => document.getElementById(id);
     const globalStatus = $('globalStatus');
@@ -436,6 +429,33 @@
       const cls = status === 'completed' ? 'completed' : status === 'running' || status === 'queued' ? 'running' : status === 'failed' ? 'failed' : '';
       return `<span class="pill ${cls}">${escapeHtml(status || 'unknown')}</span>`;
     }
+    function badge(label, cls = 'badge-gray') {
+      return `<span class="badge ${cls}">${escapeHtml(label || '—')}</span>`;
+    }
+    function statusBadge(status) {
+      if (status === 'completed' || status === 'confirmed' || status === 'selected_for_report') return badge(status, 'badge-green');
+      if (status === 'running' || status === 'queued' || status === 'needs_review') return badge(status, 'badge-amber');
+      if (status === 'failed' || status === 'error') return badge(status, 'badge-red');
+      return badge(status || 'unknown', 'badge-gray');
+    }
+    function classificationBadge(classification) {
+      if (classification === 'direct_comp') return badge('Direct Comp', 'badge-purple');
+      if (classification === 'audience_comp') return badge('Audience Comp', 'badge-blue');
+      if (classification === 'commercial_benchmark') return badge('Benchmark', 'badge-amber');
+      if (classification === 'low_fit' || classification === 'noise') return badge(classification === 'noise' ? 'Noise' : 'Low Fit', 'badge-gray');
+      if (classification) return badge(classification.replaceAll('_', ' '), 'badge-gray');
+      return '';
+    }
+    function controlBadge(controlType) {
+      if (!controlType) return '';
+      const cls = controlType === 'benchmark_only' ? 'badge-amber' : controlType === 'require_include' || controlType === 'must_consider' ? 'badge-purple' : 'badge-gray';
+      return badge(controlLabels[controlType] || controlType, cls);
+    }
+    function sourceBadge(source) {
+      if (!source) return '';
+      const cls = ['user_supplied', 'client_supplied'].includes(source) ? 'badge-purple' : 'badge-gray';
+      return badge(sourceLabels[source] || source, cls);
+    }
     async function fetchJson(path, query = '', options = {}) {
       const resp = await fetch(buildUrl(path, query), options);
       const text = await resp.text();
@@ -451,6 +471,8 @@
     function switchMode(mode) {
       dashboardMode.classList.toggle('active', mode === 'dashboard');
       workspaceMode.classList.toggle('active', mode === 'workspace');
+      $('btnBackDashboard').classList.toggle('hidden', mode !== 'workspace');
+      $('workspaceSelectorWrap').classList.toggle('hidden', mode === 'workspace');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
@@ -502,12 +524,12 @@
         <tr>
           <td>${escapeHtml(row.game.title || 'Unknown game')}</td>
           <td>${escapeHtml(row.run.name || '(unnamed run)')}</td>
-          <td>${statusPill(row.run.status)}</td>
+          <td>${statusBadge(row.run.status)}</td>
           <td>${escapeHtml(row.run.current_stage || '—')}</td>
           <td>${row.candidateCount}</td>
           <td>${row.reportCount}</td>
           <td>${escapeHtml(formatDate(row.run.updated_at || row.run.created_at))}</td>
-          <td><button data-run-id="${escapeHtml(row.run.id)}" class="open-run">Open</button></td>
+          <td><button data-run-id="${escapeHtml(row.run.id)}" class="btn btn-secondary open-run">Open</button></td>
         </tr>
       `).join('');
     }
@@ -516,7 +538,7 @@
       globalStatus.textContent = 'Loading dashboard...';
       await loadGames();
       await loadRecentRuns();
-      globalStatus.textContent = 'Dashboard ready.';
+      globalStatus.textContent = '';
     }
 
     async function createResearchRun() {
@@ -577,7 +599,7 @@
       }
       await refreshWorkspaceData();
       switchMode('workspace');
-      globalStatus.textContent = 'Research run loaded.';
+      globalStatus.textContent = '';
     }
 
     async function refreshWorkspaceData() {
@@ -595,33 +617,24 @@
       state.candidates = Array.isArray(candidates) ? candidates : [];
       state.reports = Array.isArray(reports) ? reports : [];
       state.events = Array.isArray(events) ? events : [];
+      state.activeStep = recommendedStepKey();
       renderWorkspace();
     }
 
     function renderWorkspace() {
       const run = state.currentRun || {};
       const game = state.currentGame || {};
-      $('loadedRunTitle').textContent = `${game.title || 'Unknown game'} · ${run.name || '(unnamed run)'}`;
+      $('loadedRunTitle').textContent = run.name || '(unnamed run)';
       const loadedRunStatusPill = $('loadedRunStatusPill');
       loadedRunStatusPill.className = `pill ${run.status === 'completed' ? 'completed' : run.status === 'running' || run.status === 'queued' ? 'running' : run.status === 'failed' ? 'failed' : ''}`;
       loadedRunStatusPill.textContent = run.status || 'unknown';
       const org = state.organizations.find(item => item.id === run.organization_id) || {};
       $('loadedRunDetails').innerHTML = `
-        <p><strong>Game:</strong> ${escapeHtml(game.title || 'Unknown game')}</p>
-        <p><strong>Steam App ID:</strong> ${escapeHtml(game.steam_appid || '—')} ${game.steam_url ? `· <a href="${escapeHtml(game.steam_url)}" target="_blank">Steam page</a>` : ''}</p>
-        <p><strong>Run:</strong> ${escapeHtml(run.name || '(unnamed run)')}</p>
-        <p><strong>Status:</strong> ${escapeHtml(run.status || '—')} · <strong>Current Stage:</strong> ${escapeHtml(run.current_stage || '—')} · <strong>Workspace:</strong> ${escapeHtml(org.name || org.slug || run.organization_id || '—')}</p>
-        <p class="status"><strong>Run ID:</strong> ${escapeHtml(run.id || '—')} · <strong>Last Updated:</strong> ${escapeHtml(formatDate(run.updated_at || run.created_at))}</p>
+        <div class="run-detail-grid">
+          <div class="run-detail-line"><strong>Game:</strong> ${escapeHtml(game.title || 'Unknown game')} · <strong>Steam App ID:</strong> ${escapeHtml(game.steam_appid || '—')} ${game.steam_url ? `· <a href="${escapeHtml(game.steam_url)}" target="_blank">Steam page</a>` : ''}</div>
+          <div class="run-detail-line compact"><strong>Status:</strong> ${escapeHtml(run.status || '—')} · <strong>Stage:</strong> ${escapeHtml(run.current_stage || '—')} · <strong>Workspace:</strong> ${escapeHtml(org.name || org.slug || run.organization_id || '—')} · <strong>Updated:</strong> ${escapeHtml(formatDate(run.updated_at || run.created_at))} · <strong>Run ID:</strong> ${escapeHtml(run.id || '—')}</div>
+        </div>
       `;
-      const required = state.candidates.filter(c => c.is_user_required).length;
-      const benchmarks = state.candidates.filter(c => c.is_benchmark_only).length;
-      const excluded = state.candidates.filter(c => c.is_user_excluded || c.pipeline_status === 'excluded_by_user' || c.classification === 'noise').length;
-      $('metricControls').textContent = state.controls.length;
-      $('metricCandidates').textContent = state.candidates.length;
-      $('metricRequired').textContent = required;
-      $('metricBenchmarks').textContent = benchmarks;
-      $('metricExcluded').textContent = excluded;
-      $('metricReports').textContent = state.reports.length;
       $('progressStage').textContent = run.current_stage || '—';
       $('progressStatus').textContent = run.status || '—';
       if (run.status === 'failed' || run.failure_message) {
@@ -648,7 +661,7 @@
       return event ? new Date(event.created_at).getTime() : 0;
     }
     function guidanceSkipped() {
-      return hasEvent('known_games_guidance_skipped');
+      return hasEvent('known_games_guidance_skipped') || (candidateUniverseBuilt() && state.controls.length === 0);
     }
     function candidateSetApproved() {
       const approvedAt = latestEventTime('candidate_set_approved');
@@ -670,45 +683,104 @@
       if (run.status === 'failed' && stepName.stages.includes(run.current_stage)) return 'failed';
       if (run.status === 'running' && stepName.stages.includes(run.current_stage)) return 'running';
       if (stepName.name === 'Research Setup') return state.currentRun && state.currentGame ? 'completed' : 'ready';
-      if (stepName.name === 'Known Games & Guidance') return state.controls.length > 0 || guidanceSkipped() ? 'completed' : 'ready';
+      if (stepName.name === 'Known Games & Guidance') {
+        if (state.controls.length > 0) return 'completed';
+        if (guidanceSkipped()) return 'skipped';
+        return 'ready';
+      }
       if (stepName.name === 'Build Candidate Universe') return candidateUniverseBuilt() ? 'completed' : 'ready';
       if (stepName.name === 'Review, Sort, Filter & Exclude Comps') return candidateSetApproved() ? 'completed' : (candidateUniverseBuilt() ? 'ready' : 'not started');
       if (stepName.name === 'Generate Reports') return reportsGenerated() ? 'completed' : (candidateSetApproved() ? 'ready' : 'not started');
       return 'ready';
     }
-    function renderStepper() {
-      const steps = [
-        { name: 'Research Setup', stages: ['intake'] },
-        { name: 'Known Games & Guidance', stages: ['discovery'] },
-        { name: 'Build Candidate Universe', stages: ['page_signals', 'discovery', 'enrichment', 'filtering', 'scoring', 'shortlisting', 'classification'] },
-        { name: 'Review, Sort, Filter & Exclude Comps', stages: ['classification'] },
-        { name: 'Generate Reports', stages: ['report_generation', 'review_collection', 'review_analysis', 'completed'] },
-      ];
-      $('stepper').innerHTML = steps.map((step, index) => {
-        const status = stepStatus(step);
-        return `<div class="step ${status}"><strong>${index + 1}. ${escapeHtml(step.name)}</strong><span>${escapeHtml(status)}</span></div>`;
-      }).join('');
-      renderWorkflowActions();
+    function recommendedStepKey() {
+      if (!state.currentRun || !state.currentGame) return 'setup';
+      if (reportsGenerated()) return 'reports';
+      if (state.controls.length === 0 && !guidanceSkipped() && !candidateUniverseBuilt()) return 'guidance';
+      if (!candidateUniverseBuilt()) return 'universe';
+      if (!candidateSetApproved()) return 'review';
+      return 'reports';
     }
-    function renderWorkflowActions() {
+    function canInspectStep(step, status) {
+      return ['completed', 'skipped', 'ready'].includes(status) || step.key === recommendedStepKey();
+    }
+    function renderStepper() {
+      const recommended = recommendedStepKey();
+      if (!state.activeStep || !workflowSteps.some(step => step.key === state.activeStep)) state.activeStep = recommended;
+      const activeStatus = stepStatus(workflowSteps.find(step => step.key === state.activeStep) || workflowSteps[0]);
+      if (activeStatus === 'not started' && state.activeStep !== recommended) state.activeStep = recommended;
+      $('stepper').innerHTML = workflowSteps.map((step, index) => {
+        const status = stepStatus(step);
+        const activeClass = step.key === state.activeStep ? ' active' : '';
+        return `<div class="step ${status}${activeClass}" data-step="${escapeHtml(step.key)}"><strong>${index + 1}. ${escapeHtml(step.name)}</strong><span>${escapeHtml(status)}${step.key === recommended ? ' · recommended' : ''}</span></div>`;
+      }).join('');
+      renderActiveStepPanel();
+    }
+    function renderActiveStepPanel() {
+      const step = workflowSteps.find(item => item.key === state.activeStep) || workflowSteps[0];
+      const status = stepStatus(step);
+      const recommended = recommendedStepKey();
+      $('activeStepTitle').textContent = step.key === recommended ? `Recommended Next Action: ${step.name}` : step.name;
+      $('activeStepHelp').textContent = activeStepHelp(step.key);
+      const statusPill = $('activeStepStatus');
+      statusPill.className = `pill ${status}`;
+      statusPill.textContent = status;
+      $('activeStepPanel').innerHTML = activeStepHtml(step.key);
+      renderControls();
+      renderReports();
+    }
+    function activeStepHelp(stepKey) {
+      if (stepKey === 'setup') return 'Confirm the game and run context before continuing.';
+      if (stepKey === 'guidance') return 'Optionally add known games, exclusions, benchmarks, or skip this step.';
+      if (stepKey === 'universe') return 'Build the candidate universe before human review.';
+      if (stepKey === 'review') return 'Sort, filter, inspect details, and choose which comps are included in reports.';
+      if (stepKey === 'reports') return reportsGenerated() ? 'Reports are available. View, copy, or download final outputs below.' : 'Generate final reports after comps are confirmed.';
+      return '';
+    }
+    function activeStepHtml(stepKey) {
       const universeBuilt = candidateUniverseBuilt();
       const approved = candidateSetApproved();
       const changed = candidateSetChangedAfterApproval();
-      $('btnBuildUniverse').classList.toggle('primary', !universeBuilt);
-      $('btnConfirmComps').classList.toggle('primary', universeBuilt && !approved);
-      $('btnGenerateReports').classList.toggle('primary', approved);
-      $('btnConfirmComps').disabled = !universeBuilt;
-      $('btnGenerateReports').disabled = !approved;
-      const notice = $('approvalNotice');
-      if (!universeBuilt) {
-        notice.textContent = 'Build the candidate universe before confirming comps for report.';
-      } else if (changed) {
-        notice.textContent = 'Candidate selections or exclusions changed after approval. Re-confirm comps before generating reports.';
-      } else if (approved) {
-        notice.textContent = 'Candidate set approved. Reports can be generated.';
-      } else {
-        notice.textContent = 'Candidate set is not approved yet. Confirm comps before generating reports.';
+      if (stepKey === 'setup') {
+        return `<p><strong>Game:</strong> ${escapeHtml((state.currentGame || {}).title || 'Unknown game')}</p><p><strong>Run:</strong> ${escapeHtml((state.currentRun || {}).name || '(unnamed run)')}</p><p class="status">Use the dashboard to create or open another research run.</p>`;
       }
+      if (stepKey === 'guidance') {
+        return `
+          <p>Known games and guidance are optional, but useful for required comps, exclusions, and benchmarks.</p>
+          <div class="toolbar" style="margin-top:10px;"><button id="btnSkipGuidance" class="btn btn-secondary">Skip Guidance</button></div>
+          <div class="control-help">
+            <div><strong>Required Include</strong><br />Force this game into the analysis and final consideration.</div>
+            <div><strong>Must Consider</strong><br />Ensure this game is evaluated by the system.</div>
+            <div><strong>Exclude</strong><br />Do not include this game in scoring, classification, or reports.</div>
+            <div><strong>Benchmark Only</strong><br />Use for commercial/scope comparison, not necessarily as a direct comp.</div>
+            <div><strong>Watchlist</strong><br />Track as interesting, but do not force into the report.</div>
+            <div><strong>Note Only</strong><br />Store context without changing pipeline behavior.</div>
+          </div>
+          <div class="grid two-col" style="margin-top:12px;">
+            <div><label for="candidateTitle">Title</label><input id="candidateTitle" /></div>
+            <div><label for="candidateUrl">Steam App ID or Steam Store URL</label><input id="candidateUrl" placeholder="e.g. 2288470 or https://store.steampowered.com/app/2288470/" /></div>
+            <div><label for="controlType">Control Type</label><select id="controlType"><option value="require_include">Required Include</option><option value="must_consider">Must Consider</option><option value="exclude">Exclude</option><option value="benchmark_only">Benchmark Only</option><option value="watchlist">Watchlist</option><option value="note_only">Note Only</option></select></div>
+            <div><label for="candidateReason">Reason</label><input id="candidateReason" /></div>
+            <div class="full-width"><label for="candidateNotes">User Notes</label><textarea id="candidateNotes" rows="3"></textarea></div>
+          </div>
+          <div class="toolbar" style="margin-top:12px;"><button id="btnSaveControl" class="btn btn-primary">Save Guidance</button><button id="btnCancelEdit" class="btn btn-secondary">Cancel Edit</button><button id="btnApplyControls" class="btn btn-secondary">Apply Known Games & Guidance</button></div>
+          <p id="controlStatus" class="status"></p>
+          <h3 style="margin-top:16px;">Saved Known Games & Guidance</h3>
+          <div class="table-wrap"><table><thead><tr><th>Title</th><th>Steam App ID</th><th>Control Type</th><th>Reason</th><th>User Notes</th><th>Created At</th><th>Actions</th></tr></thead><tbody id="controlsTable"><tr><td colspan="7">No run loaded.</td></tr></tbody></table></div>
+        `;
+      }
+      if (stepKey === 'universe') {
+        return `<p class="help"><strong>Build Candidate Universe</strong> applies guidance, discovers candidates, enriches metadata, and filters/scores/classifies candidates. Reports are generated later after human comp review.</p><button id="btnBuildUniverse" class="btn btn-primary">Build Candidate Universe</button>`;
+      }
+      if (stepKey === 'review') {
+        const notice = !universeBuilt ? 'Build the candidate universe before confirming comps for report.' : changed ? 'Candidate selections or exclusions changed after approval. Re-confirm comps before generating reports.' : approved ? 'Candidate set approved. Reports can be generated.' : 'Candidate set is not approved yet. Confirm comps before generating reports.';
+        return `<div class="help">${escapeHtml(notice)}</div><p>Use the Candidate Summary supporting panel below to sort, filter, inspect details, and include/remove comps from reports.</p><button id="btnConfirmComps" class="btn btn-primary" ${!universeBuilt ? 'disabled' : ''}>Confirm Comps for Report</button>`;
+      }
+      if (stepKey === 'reports') {
+        if (reportsGenerated()) return `<p class="help">Reports already exist for this run.</p><button class="btn btn-primary" id="btnViewReports">View Reports</button>${approved ? '<button id="btnGenerateReports" class="btn btn-secondary">Generate Updated Reports</button>' : '<button id="btnGenerateReports" class="btn btn-secondary" disabled>Generate Reports</button>'}`;
+        return `<p class="help">Generate final reports from the confirmed candidate set.</p><button id="btnGenerateReports" class="btn btn-primary" ${!approved ? 'disabled' : ''}>Generate Reports</button>`;
+      }
+      return '';
     }
     function renderEvents() {
       if (!state.events.length) {
@@ -718,6 +790,7 @@
       $('eventsList').innerHTML = state.events.slice(0, 10).map(event => `<li>${escapeHtml(formatDate(event.created_at))}: ${escapeHtml(event.message || event.event_type || 'Event')}</li>`).join('');
     }
     function renderControls() {
+      if (!$('controlsTable')) return;
       if (!state.controls.length) {
         $('controlsTable').innerHTML = '<tr><td colspan="7">No known games or guidance saved yet.</td></tr>';
         return;
@@ -726,21 +799,24 @@
         <tr>
           <td>${escapeHtml(control.title)}</td>
           <td>${escapeHtml(control.steam_appid || '')}</td>
-          <td>${escapeHtml(controlLabels[control.control_type] || control.control_type)}</td>
+          <td>${controlBadge(control.control_type)}</td>
           <td>${escapeHtml(control.reason || '')}</td>
           <td>${escapeHtml(control.user_notes || '')}</td>
           <td>${escapeHtml(formatDate(control.created_at))}</td>
-          <td><button class="edit-control" data-id="${escapeHtml(control.id)}">Edit</button> <button class="delete-control" data-id="${escapeHtml(control.id)}">Delete</button></td>
+          <td><button class="btn btn-secondary edit-control" data-id="${escapeHtml(control.id)}">Edit</button> <button class="btn btn-danger delete-control" data-id="${escapeHtml(control.id)}">Delete</button></td>
         </tr>
       `).join('');
     }
     function candidateMatchesFilter(item) {
       switch (state.candidateFilter) {
-        case 'required': return item.is_user_required;
+        case 'included': return item.is_selected_for_report;
+        case 'not_included': return !item.is_selected_for_report;
+        case 'known': return ['user_supplied', 'client_supplied'].includes(item.primary_source) || !!item.user_control_type;
         case 'benchmarks': return item.is_benchmark_only;
         case 'discovered': return !['user_supplied', 'client_supplied'].includes(item.primary_source);
-        case 'selected': return item.is_selected_for_report;
-        case 'excluded': return item.is_user_excluded || item.pipeline_status === 'excluded_by_user' || item.classification === 'noise' || item.classification === 'low_fit';
+        case 'direct': return item.classification === 'direct_comp';
+        case 'audience': return item.classification === 'audience_comp';
+        case 'low_fit': return ['low_fit', 'noise'].includes(item.classification);
         default: return true;
       }
     }
@@ -767,35 +843,59 @@
         return String(a.title || '').localeCompare(String(b.title || ''));
       });
     }
+    function includeToggleHtml(item, context = 'table') {
+      const pending = state.pendingCandidateIds.has(item.candidate_id);
+      const included = !!item.is_selected_for_report;
+      const label = pending ? 'Saving...' : included ? 'Included' : 'Not Included';
+      const cls = included ? 'is-included' : 'not-included';
+      const aria = included ? `Included in report for ${item.title || 'candidate'}` : `Not included in report for ${item.title || 'candidate'}`;
+      return `<button type="button" role="switch" aria-checked="${included ? 'true' : 'false'}" aria-label="${escapeHtml(aria)}" class="include-toggle ${cls}${pending ? ' saving' : ''}" data-id="${escapeHtml(item.candidate_id)}" data-context="${escapeHtml(context)}" ${pending ? 'disabled' : ''}>${label}</button>`;
+    }
     function renderCandidateSummary() {
       const rows = sortedCandidates(state.candidates.filter(candidateMatchesFilter).filter(candidateMatchesSearch));
       if (!rows.length) {
-        $('summaryTable').innerHTML = '<tr><td colspan="16">No candidates for this filter/search.</td></tr>';
+        $('summaryTable').innerHTML = '<tr><td colspan="10">No candidates for this filter/search.</td></tr>';
         return;
       }
       $('summaryTable').innerHTML = rows.map(item => `
         <tr>
-          <td>
-            <button class="toggle-selected" data-id="${escapeHtml(item.candidate_id)}">${item.is_selected_for_report ? 'Unselect' : 'Select'}</button>
-            <button class="toggle-excluded" data-id="${escapeHtml(item.candidate_id)}">${item.is_user_excluded ? 'Restore' : 'Exclude'}</button>
-          </td>
+          <td>${includeToggleHtml(item)}</td>
           <td>${escapeHtml(item.final_rank || '')}</td>
-          <td>${escapeHtml(item.title || '')}</td>
-          <td>${escapeHtml(item.steam_appid || '')}</td>
-          <td>${escapeHtml(sourceLabels[item.primary_source] || item.primary_source || '')}</td>
-          <td>${escapeHtml(controlLabels[item.user_control_type] || item.user_control_type || '')}</td>
-          <td>${escapeHtml(item.pipeline_status || '')}</td>
+          <td><span class="title-cell-main"><span class="candidate-title">${escapeHtml(item.title || '')}</span> <button class="btn btn-ghost show-details" data-id="${escapeHtml(item.candidate_id)}">Details</button></span></td>
+          <td>${sourceBadge(item.primary_source)}</td>
+          <td>${statusBadge(item.pipeline_status)}</td>
           <td>${escapeHtml(item.review_count || 0)}</td>
           <td>${item.fit_score == null ? '' : Number(item.fit_score).toFixed(1)}</td>
-          <td>${escapeHtml(item.classification || '')}</td>
+          <td>${classificationBadge(item.classification)}</td>
           <td>${item.confidence == null ? '' : Number(item.confidence).toFixed(2)}</td>
-          <td>${item.is_user_required ? 'yes' : 'no'}</td>
-          <td>${item.is_benchmark_only ? 'yes' : 'no'}</td>
-          <td>${item.is_user_excluded ? 'yes' : 'no'}</td>
-          <td>${item.is_selected_for_report ? 'yes' : 'no'}</td>
           <td>${escapeHtml(item.reasoning || item.overlapping_tags || '')}</td>
         </tr>
+        ${state.expandedCandidateId === item.candidate_id ? candidateDetailsRow(item) : ''}
       `).join('');
+    }
+    function candidateDetailsRow(item) {
+      return `
+        <tr>
+          <td colspan="10">
+            <div class="help">
+              <strong>${escapeHtml(item.title || 'Candidate details')}</strong><br />
+              <strong>Included in Report?</strong> ${includeToggleHtml(item, 'details')}<br />
+              <strong>Classification:</strong> ${classificationBadge(item.classification) || '—'} ·
+              <strong>Source:</strong> ${sourceBadge(item.primary_source) || '—'} ·
+              <strong>Control:</strong> ${controlBadge(item.user_control_type) || '—'}<br />
+              <strong>Steam App ID:</strong> ${escapeHtml(item.steam_appid || '—')} ·
+              <strong>Required:</strong> ${item.is_user_required ? badge('Required', 'badge-purple') : 'No'} ·
+              <strong>Benchmark:</strong> ${item.is_benchmark_only ? badge('Benchmark', 'badge-amber') : 'No'}<br />
+              <strong>Fit Score:</strong> ${item.fit_score == null ? '—' : Number(item.fit_score).toFixed(1)} ·
+              <strong>Confidence:</strong> ${item.confidence == null ? '—' : Number(item.confidence).toFixed(2)} ·
+              <strong>Reviews:</strong> ${escapeHtml(item.review_count || 0)}<br />
+              <strong>Overlapping Tags:</strong> ${escapeHtml(Array.isArray(item.overlapping_tags) ? item.overlapping_tags.join(', ') : item.overlapping_tags || '—')}<br />
+              <strong>Reasoning:</strong> ${escapeHtml(item.reasoning || '—')}<br />
+              <span class="small"><strong>Advanced/debug:</strong> backend excluded flag = ${item.is_user_excluded ? 'true' : 'false'}, pipeline status = ${escapeHtml(item.pipeline_status || '—')}</span>
+            </div>
+          </td>
+        </tr>
+      `;
     }
     function renderReports() {
       if (!state.reports.length) {
@@ -810,9 +910,9 @@
               <p class="status">${escapeHtml(report.report_type)} · Generated ${escapeHtml(formatDate(report.created_at))} · ${escapeHtml(report.template_version || '')}</p>
             </div>
             <div class="toolbar">
-              <button class="toggle-report" data-id="${escapeHtml(report.id)}">Open</button>
-              <button class="copy-report" data-id="${escapeHtml(report.id)}">Copy Markdown</button>
-              <button class="download-report" data-id="${escapeHtml(report.id)}">Download Markdown</button>
+              <button class="btn btn-secondary toggle-report" data-id="${escapeHtml(report.id)}">Open</button>
+              <button class="btn btn-secondary copy-report" data-id="${escapeHtml(report.id)}">Copy Markdown</button>
+              <button class="btn btn-secondary download-report" data-id="${escapeHtml(report.id)}">Download Markdown</button>
             </div>
           </div>
           <pre id="report-${escapeHtml(report.id)}" class="report-viewer hidden">${escapeHtml(report.content_md || '')}</pre>
@@ -846,17 +946,20 @@
     }
     function resetControlForm() {
       state.editingControlId = null;
+      if (!$('candidateTitle')) return;
       $('candidateTitle').value = '';
       $('candidateUrl').value = '';
       $('controlType').value = 'require_include';
       $('candidateReason').value = '';
       $('candidateNotes').value = '';
-      $('btnSaveControl').textContent = 'Save Control';
+      $('btnSaveControl').textContent = 'Save Guidance';
       $('btnCancelEdit').disabled = true;
     }
     function editControl(controlId) {
       const control = state.controls.find(item => item.id === controlId);
       if (!control) return;
+      state.activeStep = 'guidance';
+      renderActiveStepPanel();
       state.editingControlId = controlId;
       $('candidateTitle').value = control.title || '';
       $('candidateUrl').value = control.steam_url || control.steam_appid || '';
@@ -917,7 +1020,7 @@
       $('btnBuildUniverse').disabled = true;
       try {
         const result = await fetchJson('build_candidate_universe', '', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ run_id: state.currentRun.id }) });
-        $('actionStatus').textContent = `Candidate universe built. Status: ${result.status}. Review, sort, filter, exclude, and confirm comps before generating reports.`;
+        $('actionStatus').textContent = `Candidate universe built. Status: ${result.status}. Review, sort, filter, choose included comps, and confirm before generating reports.`;
         await refreshWorkspaceData();
         await refreshDashboard();
       } catch (error) {
@@ -971,6 +1074,47 @@
         $('actionStatus').textContent = `Candidate update failed: ${error.message}`;
       }
     }
+    async function toggleCandidateInclusion(candidateId) {
+      const candidate = state.candidates.find(item => item.candidate_id === candidateId);
+      if (!candidate || state.pendingCandidateIds.has(candidateId)) return;
+      const previousSelected = !!candidate.is_selected_for_report;
+      const nextSelected = !previousSelected;
+      state.pendingCandidateIds.add(candidateId);
+      candidate.is_selected_for_report = nextSelected;
+      candidate.is_shortlisted = nextSelected ? true : candidate.is_shortlisted;
+      candidate.pipeline_status = nextSelected ? 'selected_for_report' : (candidate.classification ? 'classified' : candidate.pipeline_status || 'scored');
+      renderCandidateSummary();
+      try {
+        await fetchJson('run_candidates', '', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: candidateId,
+            updates: {
+              is_selected_for_report: nextSelected,
+              is_shortlisted: nextSelected ? true : candidate.is_shortlisted,
+              pipeline_status: candidate.pipeline_status,
+            },
+          }),
+        });
+        await createRunEvent(
+          nextSelected ? 'candidate_included_for_report' : 'candidate_removed_from_report',
+          nextSelected ? 'Candidate included for report' : 'Candidate removed from report',
+          'classification',
+          { candidate_id: candidateId, title: candidate.title, is_selected_for_report: nextSelected }
+        );
+        await markCandidateSetChanged({ candidate_id: candidateId, title: candidate.title, is_selected_for_report: nextSelected });
+        $('actionStatus').textContent = nextSelected ? 'Candidate included in report.' : 'Candidate removed from report.';
+      } catch (error) {
+        candidate.is_selected_for_report = previousSelected;
+        candidate.pipeline_status = previousSelected ? 'selected_for_report' : (candidate.classification ? 'classified' : candidate.pipeline_status || 'scored');
+        $('actionStatus').textContent = 'Could not update report inclusion. Please try again.';
+      } finally {
+        state.pendingCandidateIds.delete(candidateId);
+        renderCandidateSummary();
+        await refreshWorkspaceData();
+      }
+    }
     async function runFullPipeline() {
       if (!state.currentRun) return;
       $('actionStatus').textContent = 'Running full research pipeline. This may take a few minutes...';
@@ -996,18 +1140,24 @@
     $('btnAdvancedRefreshRuns').addEventListener('click', refreshDashboard);
     $('btnAdvancedLoad').addEventListener('click', () => openRun($('advancedRunId').value.trim()));
     $('btnBackDashboard').addEventListener('click', () => switchMode('dashboard'));
-    $('btnWorkspaceRefresh').addEventListener('click', refreshWorkspaceData);
-    $('btnSaveControl').addEventListener('click', saveControl);
-    $('btnCancelEdit').addEventListener('click', resetControlForm);
-    $('btnSkipGuidance').addEventListener('click', skipGuidance);
-    $('btnApplyControls').addEventListener('click', applyControls);
-    $('btnBuildUniverse').addEventListener('click', buildCandidateUniverse);
-    $('btnConfirmComps').addEventListener('click', confirmCompsForReport);
-    $('btnGenerateReports').addEventListener('click', generateReports);
     $('btnRunPipeline').addEventListener('click', runFullPipeline);
-    $('btnRefreshControls').addEventListener('click', refreshWorkspaceData);
-    $('btnRefreshSummary').addEventListener('click', refreshWorkspaceData);
-    $('btnRefreshReports').addEventListener('click', refreshWorkspaceData);
+    $('btnShowBackendDetails').addEventListener('click', () => $('runProgressPanel').classList.remove('hidden'));
+    $('btnHideBackendDetails').addEventListener('click', () => $('runProgressPanel').classList.add('hidden'));
+    $('activeStepPanel').addEventListener('click', event => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (target.id === 'btnSaveControl') saveControl();
+      if (target.id === 'btnCancelEdit') resetControlForm();
+      if (target.id === 'btnSkipGuidance') skipGuidance();
+      if (target.id === 'btnApplyControls') applyControls();
+      if (target.id === 'btnBuildUniverse') buildCandidateUniverse();
+      if (target.id === 'btnConfirmComps') confirmCompsForReport();
+      if (target.id === 'btnGenerateReports') generateReports();
+      if (target.id === 'btnViewReports') document.getElementById('reportsList').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const controlId = target.dataset.id;
+      if (controlId && target.classList.contains('edit-control')) editControl(controlId);
+      if (controlId && target.classList.contains('delete-control')) deleteControl(controlId);
+    });
     workspaceSelect.addEventListener('change', refreshDashboard);
     runSearch.addEventListener('input', renderRecentRuns);
     existingGameSelect.addEventListener('change', () => {
@@ -1021,13 +1171,16 @@
       const target = event.target;
       if (target instanceof HTMLElement && target.classList.contains('open-run')) openRun(target.dataset.runId);
     });
-    $('controlsTable').addEventListener('click', event => {
-      const target = event.target;
-      if (!(target instanceof HTMLElement)) return;
-      const id = target.dataset.id;
-      if (!id) return;
-      if (target.classList.contains('edit-control')) editControl(id);
-      if (target.classList.contains('delete-control')) deleteControl(id);
+    $('stepper').addEventListener('click', event => {
+      const stepEl = event.target instanceof HTMLElement ? event.target.closest('.step') : null;
+      if (!(stepEl instanceof HTMLElement) || !stepEl.dataset.step) return;
+      const step = workflowSteps.find(item => item.key === stepEl.dataset.step);
+      if (!step) return;
+      const status = stepStatus(step);
+      if (!canInspectStep(step, status)) return;
+      state.activeStep = step.key;
+      renderStepper();
+      $('activeStepSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     $('candidateFilters').addEventListener('click', event => {
       const target = event.target;
@@ -1055,31 +1208,12 @@
       if (!candidateId) return;
       const candidate = state.candidates.find(item => item.candidate_id === candidateId);
       if (!candidate) return;
-      if (target.classList.contains('toggle-selected')) {
-        const nextSelected = !candidate.is_selected_for_report;
-        updateCandidate(
-          candidateId,
-          {
-            is_selected_for_report: nextSelected,
-            is_shortlisted: nextSelected ? true : candidate.is_shortlisted,
-            is_user_excluded: nextSelected ? false : candidate.is_user_excluded,
-            pipeline_status: nextSelected ? 'selected_for_report' : (candidate.classification ? 'classified' : candidate.pipeline_status || 'scored'),
-          },
-          nextSelected ? 'Candidate selected for report.' : 'Candidate unselected from report.'
-        );
+      if (target.classList.contains('include-toggle')) {
+        toggleCandidateInclusion(candidateId);
       }
-      if (target.classList.contains('toggle-excluded')) {
-        const nextExcluded = !candidate.is_user_excluded;
-        updateCandidate(
-          candidateId,
-          {
-            is_user_excluded: nextExcluded,
-            is_selected_for_report: nextExcluded ? false : candidate.is_selected_for_report,
-            pipeline_status: nextExcluded ? 'excluded_by_user' : (candidate.classification ? 'classified' : 'scored'),
-            user_exclusion_reason: nextExcluded ? 'Excluded during human comp review.' : null,
-          },
-          nextExcluded ? 'Candidate excluded from report set.' : 'Candidate restored to candidate set.'
-        );
+      if (target.classList.contains('show-details')) {
+        state.expandedCandidateId = state.expandedCandidateId === candidateId ? null : candidateId;
+        renderCandidateSummary();
       }
     });
     reportsList.addEventListener('click', async event => {

@@ -479,7 +479,7 @@ def runReviewPipeline(run_id: str) -> dict[str, Any]:
     candidates = client.select(
         'run_candidates',
         '*',
-        {'run_id': f'eq.{run_id}', 'is_selected_for_report': 'eq.true', 'is_user_excluded': 'eq.false', 'order': 'final_rank.asc.nullslast', 'limit': str(candidate_limit)},
+        {'run_id': f'eq.{run_id}', 'is_selected_for_report': 'eq.true', 'order': 'final_rank.asc.nullslast', 'limit': str(candidate_limit)},
     )
     collection_results = []
     for candidate in candidates:

@@ -562,7 +562,7 @@ def generate_competitor_report(run_id: str) -> dict[str, Any]:
     run, _game = get_run_and_game(run_id)
     updateResearchRunStatus(run_id, 'running', current_stage='report_generation')
     rows = client.select('v_run_candidate_summary', '*', {'run_id': f'eq.{run_id}', 'order': 'fit_score.desc.nullslast'})
-    selected = [row for row in rows if row.get('is_selected_for_report') and not row.get('is_user_excluded')]
+    selected = [row for row in rows if row.get('is_selected_for_report')]
     lines = [f"# Competitor Research Report: {run.get('name') or run_id}", '', '## Executive Summary', '']
     lines.append(f'Generated from {len(rows)} candidates; {len(selected)} selected for report.')
     lines.append('')
