@@ -4,73 +4,110 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Steam GTM Research</title>
+  <link rel="icon" href="/assets/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png" />
+  <link rel="manifest" href="/assets/site.webmanifest" />
+  <meta name="theme-color" content="#5A3A88" />
   <style>
     :root {
-      --bg: #F7F8FB;
-      --card: #FFFFFF;
-      --muted-surface: #F1F3F7;
-      --border: #DDE2EA;
-      --border-strong: #C7CEDA;
-      --text: #172033;
-      --muted: #5F6B7A;
-      --subtle: #7A8698;
-      --primary: #5A3A88;
-      --primary-dark: #4A2F73;
-      --primary-soft: #F1ECF8;
-      --primary-border: #D8C8EE;
+      --color-primary: #5A3A88;
+      --color-primary-hover: #4A2F73;
+      --color-primary-soft: #F1ECF8;
+      --color-primary-border: #D8C8EE;
+      --color-accent-green: #12794D;
+      --color-accent-green-soft: #E8F5EF;
+      --color-accent-green-border: #A8D9C2;
+      --color-bg: #F7F8FB;
+      --color-surface: #FFFFFF;
+      --color-surface-muted: #F1F3F7;
+      --color-border: #DDE2EA;
+      --color-border-strong: #C7CEDA;
+      --color-text: #172033;
+      --color-text-muted: #5F6B7A;
+      --color-text-subtle: #7A8698;
+      --color-danger: #B42318;
+      --color-danger-soft: #FDECEC;
+      --color-warning: #A15C07;
+      --color-warning-soft: #FFF4E5;
+      --color-info: #3154A3;
+      --color-info-soft: #EEF3FF;
+      --bg: var(--color-bg);
+      --card: var(--color-surface);
+      --muted-surface: var(--color-surface-muted);
+      --border: var(--color-border);
+      --border-strong: var(--color-border-strong);
+      --text: var(--color-text);
+      --muted: var(--color-text-muted);
+      --subtle: var(--color-text-subtle);
+      --primary: var(--color-primary);
+      --primary-dark: var(--color-primary-hover);
+      --primary-soft: var(--color-primary-soft);
+      --primary-border: var(--color-primary-border);
       --on-primary: #FFFFFF;
-      --success: #12794D;
-      --success-soft: #E8F5EF;
-      --success-border: #A8D9C2;
-      --danger: #b42318;
-      --danger-soft: #fffbfa;
-      --danger-border: #fecdca;
-      --warn: #b54708;
-      --warn-soft: #fffaeb;
-      --warn-border: #fedf89;
+      --success: var(--color-accent-green);
+      --success-soft: var(--color-accent-green-soft);
+      --success-border: var(--color-accent-green-border);
+      --danger: var(--color-danger);
+      --danger-soft: var(--color-danger-soft);
+      --danger-border: #F3B7B1;
+      --warn: var(--color-warning);
+      --warn-soft: var(--color-warning-soft);
+      --warn-border: #F4C47A;
       --soft: var(--primary-soft);
     }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; color: var(--text); background: var(--bg); }
-    header { background: var(--card); border-bottom: 1px solid var(--border); padding: 20px 28px; display: flex; gap: 18px; justify-content: space-between; align-items: flex-start; }
-    h1, h2, h3 { margin: 0 0 8px; font-weight: 750; letter-spacing: -0.02em; }
-    h1 { font-size: 28px; line-height: 1.15; }
-    h2 { font-size: 20px; line-height: 1.25; }
-    h3 { font-size: 15px; line-height: 1.3; }
+    body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; line-height: 1.45; color: var(--text); background: var(--bg); }
+    .app-masthead { position: relative; overflow: hidden; padding: 28px 32px; border-bottom: 1px solid var(--border); background: radial-gradient(circle at 8% 20%, rgba(90, 58, 136, 0.20), transparent 32%), radial-gradient(circle at 96% 8%, rgba(18, 121, 77, 0.14), transparent 30%), linear-gradient(135deg, #F5F0FB 0%, #FBFBFE 54%, #F3FAF6 100%); display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    .app-masthead::after { content: ""; position: absolute; right: -80px; top: -120px; width: 340px; height: 340px; border-radius: 999px; border: 1px solid rgba(90, 58, 136, 0.10); background: rgba(255, 255, 255, 0.18); pointer-events: none; }
+    .masthead-brand { display: flex; align-items: center; gap: 16px; position: relative; z-index: 1; min-width: 0; }
+    .app-logo { width: 76px; height: 76px; border-radius: 20px; object-fit: cover; flex: 0 0 auto; box-shadow: 0 10px 28px rgba(90, 58, 136, 0.16); }
+    .masthead-title-block h1 { margin: 0; font-size: 32px; line-height: 1.05; font-weight: 800; letter-spacing: -0.035em; color: var(--text); }
+    .masthead-title-block p { margin: 8px 0 0; max-width: 680px; font-size: 15px; line-height: 1.45; color: var(--muted); }
+    .masthead-eyebrow { margin-bottom: 6px; font-size: 12px; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; color: var(--primary); }
+    .masthead-actions { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; }
+    .workspace-control { min-width: 220px; }
+    .workspace-control label { display: block; margin: 0 0 6px; font-size: 12px; font-weight: 700; color: var(--text); }
+    .workspace-control select { min-height: 44px; margin-top: 0; border-radius: 12px; background: rgba(255, 255, 255, 0.78); border: 1px solid var(--border); }
+    h1, h2, h3 { color: var(--text); letter-spacing: -0.03em; }
+    h1, h2, h3 { margin: 0 0 8px; font-weight: 800; }
+    h1 { font-size: 32px; line-height: 1.1; }
+    h2 { font-size: 24px; line-height: 1.2; }
+    h3 { font-size: 18px; line-height: 1.3; font-weight: 750; }
     p { margin: 6px 0; }
-    main { padding: 24px 28px 60px; max-width: 1600px; margin: 0 auto; }
+    main, .page-shell { max-width: 1680px; margin: 0 auto; padding: 28px 32px 48px; }
     label { display: block; margin-top: 12px; font-weight: 700; font-size: 13px; color: var(--text); }
     input, select, textarea, button { font: inherit; }
     input, select, textarea { width: 100%; min-height: 40px; margin-top: 5px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); color: var(--text); }
     input:focus, select:focus, textarea:focus { outline: 3px solid var(--primary-soft); border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary-border); }
     textarea { resize: vertical; }
-    button, .btn { min-height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; background: var(--card); color: var(--text); cursor: pointer; font-weight: 650; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+    button, .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 0 16px; border-radius: 11px; border: 1px solid transparent; background: var(--card); color: var(--text); font-size: 14px; font-weight: 700; cursor: pointer; transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, transform 80ms ease; }
+    button:active, .btn:active { transform: translateY(1px); }
     button:disabled { cursor: not-allowed; opacity: 0.55; }
-    .btn-primary, .primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 750; }
+    .btn-primary, .primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); box-shadow: 0 1px 2px rgba(23, 32, 51, 0.12); }
     .btn-primary:hover, .primary:hover { background: var(--primary-dark); border-color: var(--primary-dark); }
-    .btn-secondary, .secondary { background: var(--card); border-color: var(--border-strong); color: var(--text); }
+    .btn-secondary, .secondary { background: rgba(255, 255, 255, 0.78); border-color: var(--border-strong); color: var(--text); }
     .btn-secondary:hover, .secondary:hover { background: var(--muted-surface); }
     .btn-ghost { background: transparent; border-color: transparent; color: var(--primary); }
-    .btn-ghost:hover { background: var(--primary-soft); border-color: var(--primary-border); }
+    .btn-ghost:hover { background: var(--primary-soft); }
     .btn-danger { background: var(--danger-soft); border-color: var(--danger-border); color: var(--danger); }
     .btn-danger:hover { background: var(--danger-soft); border-color: var(--danger); }
-    table { width: 100%; border-collapse: collapse; margin-top: 12px; background: var(--card); }
-    th, td { padding: 9px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; font-size: 13px; }
-    th { background: var(--muted-surface); color: var(--muted); font-size: 12px; text-transform: none; font-weight: 750; position: sticky; top: 0; z-index: 1; }
-    tbody tr:hover { background: #FAFBFD; }
-    .subhead { color: var(--muted); max-width: 760px; }
-    .header-main { min-width: 0; }
-    .header-title-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-    .header-actions { display: flex; gap: 14px; align-items: flex-start; justify-content: flex-end; }
-    .header-back { padding: 7px 10px; }
-    .workspace-select { min-width: 230px; }
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px; box-shadow: 0 1px 2px rgba(23,32,51,.04); }
+    table { width: 100%; border-collapse: collapse; margin-top: 0; background: var(--card); }
+    th, td { padding: 12px; border-bottom: 0; border-top: 1px solid var(--border); text-align: left; vertical-align: top; font-size: 13px; }
+    th { background: #F4F6FA; color: var(--muted); font-size: 12px; text-transform: none; font-weight: 800; position: sticky; top: 0; z-index: 1; border-top: 0; }
+    tbody tr:hover { background: #FAF7FE; }
+    .header-back { white-space: nowrap; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px; box-shadow: 0 1px 3px rgba(23, 32, 51, 0.05); }
     .grid { display: grid; gap: 16px; }
     .two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .three-col { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .dashboard-actions { margin: 22px 0 18px; }
-    .action-card { padding: 22px; border: 1px solid var(--border); border-radius: 16px; background: var(--card); }
-    .action-card p { color: var(--muted); min-height: 42px; }
+    .action-card { position: relative; overflow: hidden; background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 28px; box-shadow: 0 1px 3px rgba(23, 32, 51, 0.05); }
+    .action-card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--primary); }
+    .action-card.secondary::before { background: var(--success); }
+    .action-card h2 { margin: 0 0 10px; font-size: 22px; letter-spacing: -0.025em; }
+    .action-card p { color: var(--muted); min-height: 42px; margin: 0 0 24px; }
     .linkish { border: 0; background: transparent; color: var(--primary); padding: 0; }
     .status { font-size: 13px; color: var(--muted); }
     #globalStatus:empty { display: none; }
@@ -85,43 +122,77 @@
     .pill.completed { border-color: var(--success-border); background: var(--success-soft); color: var(--success); }
     .pill.running { border-color: var(--warn-border); background: var(--warn-soft); color: var(--warn); }
     .pill.failed { border-color: var(--danger-border); background: var(--danger-soft); color: var(--danger); }
-    .badge { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; font-size: 12px; line-height: 1.25; font-weight: 700; background: var(--muted-surface); color: var(--muted); white-space: nowrap; }
-    .badge-purple { background: var(--primary-soft); border-color: var(--primary-border); color: var(--primary); }
-    .badge-blue { background: #EEF6FF; border-color: #B9D9FF; color: #175CD3; }
+    .badge { display: inline-flex; align-items: center; gap: 4px; border: 1px solid transparent; border-radius: 999px; padding: 3px 9px; font-size: 12px; line-height: 1.25; font-weight: 750; background: var(--muted-surface); color: var(--muted); white-space: nowrap; }
+    .badge-purple { background: var(--primary-soft); border-color: var(--primary-border); color: var(--primary-dark); }
+    .badge-blue { background: var(--color-info-soft); border-color: #C8D6F5; color: var(--color-info); }
     .badge-amber { background: var(--warn-soft); border-color: var(--warn-border); color: var(--warn); }
     .badge-green { background: var(--success-soft); border-color: var(--success-border); color: var(--success); }
     .badge-gray { background: var(--muted-surface); border-color: var(--border-strong); color: var(--muted); }
     .badge-red { background: var(--danger-soft); border-color: var(--danger-border); color: var(--danger); }
-    .include-toggle { min-width: 112px; min-height: 34px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 750; }
+    .include-toggle { width: 126px; min-width: 112px; min-height: 34px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 750; }
     .include-toggle.is-included { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
     .include-toggle.not-included { background: var(--card); border-color: var(--border-strong); color: var(--muted); }
+    .include-toggle.not-included:hover { background: var(--primary-soft); border-color: var(--primary-border); color: var(--primary); }
     .include-toggle.saving { opacity: 0.7; }
     .include-toggle:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(90, 58, 136, 0.20); }
+    .table-col-details { width: 56px; min-width: 56px; }
     .table-col-included { width: 150px; min-width: 150px; }
+    .table-col-source { width: 180px; min-width: 180px; }
+    .table-col-status { width: 142px; min-width: 142px; }
+    .table-col-classification { width: 152px; min-width: 152px; }
+    .table-col-run-status { width: 142px; min-width: 142px; }
+    .candidate-col-source .badge { width: 160px; justify-content: center; }
+    .candidate-col-status .badge { width: 122px; justify-content: center; }
+    .candidate-col-classification .badge { width: 132px; justify-content: center; }
+    .recent-run-status .badge { width: 122px; justify-content: center; }
     .candidate-title { font-size: 14px; font-weight: 750; color: var(--text); }
     .title-cell-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .details-toggle { min-width: 42px; width: 42px; height: 42px; padding: 0; border-radius: 999px; font-size: 20px; line-height: 1; font-weight: 900; color: var(--primary); border-color: var(--primary-border); background: var(--card); }
+    .details-toggle:hover { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-dark); }
+    .details-toggle[aria-expanded="true"] { background: var(--primary-soft); color: var(--primary); border-color: var(--primary-border); }
+    .details-toggle:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(90, 58, 136, 0.20); }
+    .candidate-row-expanded { background: #FAF7FE; box-shadow: inset 4px 0 0 var(--primary); }
+    .candidate-row-expanded:hover { background: #FAF7FE; }
+    .candidate-detail-card { background: linear-gradient(135deg, rgba(241, 236, 248, 0.94), rgba(255, 255, 255, 0.88)); border: 1px solid var(--primary-border); border-radius: 16px; padding: 20px; }
+    .candidate-detail-header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+    .candidate-detail-layout { display: grid; grid-template-columns: minmax(260px, 420px) 1fr; gap: 18px; align-items: start; }
+    .candidate-media { border: 1px solid var(--primary-border); border-radius: 14px; overflow: hidden; background: var(--card); min-height: 150px; }
+    .candidate-media img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; }
+    .candidate-media-empty { padding: 18px; color: var(--muted); font-size: 13px; }
+    .candidate-detail-title { font-size: 18px; font-weight: 800; margin-bottom: 10px; }
+    .candidate-detail-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+    .candidate-detail-grid { display: grid; gap: 8px; }
+    .detail-label { font-weight: 800; }
     .stepper { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
-    .step { border: 1px solid var(--border); border-radius: 12px; padding: 10px; background: var(--card); }
+    .step { border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; background: var(--card); }
     .step strong { display: block; font-size: 13px; }
     .step span { color: var(--muted); font-size: 12px; }
     .step.completed { background: var(--success-soft); border-color: var(--success-border); }
     .step.running { background: var(--warn-soft); border-color: var(--warn-border); }
     .step.failed { background: var(--danger-soft); border-color: var(--danger-border); }
-    .step.skipped { background: var(--muted-surface); border-color: var(--border-strong); }
-    .step.active { outline: 2px solid var(--primary); background: var(--primary-soft); border-color: var(--primary-border); }
+    .step.skipped { background: var(--muted-surface); border-color: var(--border); }
+    .step.active { outline: 0; background: var(--primary-soft); border-color: var(--primary); box-shadow: inset 0 0 0 1px rgba(90, 58, 136, 0.12); }
     .step { cursor: pointer; }
     .loaded-run { margin-bottom: 16px; }
+    .loaded-run-card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 24px; box-shadow: 0 1px 3px rgba(23, 32, 51, 0.05); }
     .loaded-run h2 { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
     .loaded-run-title { font-size: inherit; font-weight: inherit; color: inherit; }
-    .run-detail-grid { display: grid; gap: 4px; margin-top: 8px; }
+    .run-detail-grid { display: grid; gap: 4px; margin-top: 12px; color: var(--muted); }
     .run-detail-line { color: var(--text); font-size: 14px; }
     .run-detail-line.compact { color: var(--muted); font-size: 12px; }
+    .loaded-run-meta { margin-top: 12px; color: var(--muted); font-size: 14px; }
+    .loaded-run-meta a { color: var(--primary); font-weight: 700; text-decoration: none; }
+    .loaded-run-meta a:hover { text-decoration: underline; }
+    .loaded-run-stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
+    .stat-card { border: 1px solid var(--border); background: #FAFBFD; border-radius: 14px; padding: 14px; }
+    .stat-card strong { display: block; font-size: 20px; font-weight: 800; color: var(--text); }
+    .stat-card span { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; }
     .help { background: var(--primary-soft); border: 1px solid var(--primary-border); border-radius: 10px; padding: 10px 12px; color: var(--text); font-size: 13px; margin-top: 10px; }
     .control-help { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
     .control-help div { border: 1px solid var(--border); border-radius: 8px; padding: 8px; font-size: 12px; background: var(--muted-surface); }
     .section { margin-top: 18px; }
     .full-width { grid-column: 1 / -1; }
-    .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 12px; margin-top: 12px; max-height: 620px; background: var(--card); }
+    .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 16px; margin-top: 12px; max-height: 620px; background: var(--card); }
     .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
     .filters button.active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
     .report-card { border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-top: 12px; background: var(--card); }
@@ -130,32 +201,45 @@
     details.advanced summary { cursor: pointer; font-weight: 700; }
     .hidden { display: none !important; }
     .small { font-size: 12px; }
+    @media (max-width: 800px) {
+      main, .page-shell { padding: 20px 16px 36px; }
+      .app-masthead { padding: 22px 16px; flex-direction: column; align-items: flex-start; }
+      .app-logo { width: 56px; height: 56px; border-radius: 16px; }
+      .masthead-title-block h1 { font-size: 28px; }
+      .masthead-actions { width: 100%; align-items: stretch; flex-direction: column; }
+      .workspace-control { min-width: 0; width: 100%; }
+      .header-back { width: 100%; }
+    }
     @media (max-width: 1000px) {
       .two-col, .three-col, .stepper { grid-template-columns: 1fr; }
-      header { display: block; }
-      .header-actions { justify-content: flex-start; margin-top: 12px; }
-      .workspace-select { margin-top: 12px; }
+      .loaded-run-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .candidate-detail-layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
+      .loaded-run-stats { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
-  <header>
-    <div class="header-main">
-      <div class="header-title-row">
+  <header class="app-masthead">
+    <div class="masthead-brand">
+      <img class="app-logo" src="/assets/logo.png" alt="Steam GTM Research logo" />
+      <div class="masthead-title-block">
+        <div class="masthead-eyebrow">Game Market Intelligence</div>
         <h1>Steam GTM Research</h1>
+        <p>Research competitors, audience signals, and positioning opportunities for a Steam game.</p>
       </div>
-      <p class="subhead">Research competitors, audience signals, and positioning opportunities for a Steam game.</p>
     </div>
-    <div class="header-actions">
+    <div class="masthead-actions">
       <button id="btnBackDashboard" class="btn btn-secondary header-back hidden">← Back to Dashboard</button>
-      <div id="workspaceSelectorWrap" class="workspace-select">
+      <div id="workspaceSelectorWrap" class="workspace-control">
         <label for="workspaceSelect">Workspace</label>
         <select id="workspaceSelect"><option value="">Loading workspaces...</option></select>
       </div>
     </div>
   </header>
 
-  <main>
+  <main class="page-shell">
     <p id="globalStatus" class="status">Loading dashboard...</p>
 
     <section id="dashboardMode" class="mode active">
@@ -165,7 +249,7 @@
           <p>Create a new analysis for a Steam game.</p>
           <button id="btnStartNew" class="btn btn-primary">Start New Run</button>
         </div>
-        <div class="action-card">
+        <div class="action-card secondary">
           <h2>Review Existing Research Run</h2>
           <p>Open a saved run, adjust candidates, continue the pipeline, or view reports.</p>
           <button id="btnBrowseRuns" class="btn btn-secondary">Browse Runs</button>
@@ -224,7 +308,7 @@
               <tr>
                 <th>Game</th>
                 <th>Run Name</th>
-                <th>Status</th>
+                <th class="table-col-run-status">Status</th>
                 <th>Stage</th>
                 <th>Candidates</th>
                 <th>Reports</th>
@@ -258,7 +342,7 @@
     </section>
 
     <section id="workspaceMode" class="mode">
-      <section class="card loaded-run">
+      <section class="loaded-run-card loaded-run">
         <div class="toolbar" style="justify-content:space-between;">
           <div>
             <h2>Loaded Run: <span id="loadedRunTitle" class="loaded-run-title">No run loaded</span></h2>
@@ -338,10 +422,10 @@
           <table>
             <thead>
               <tr>
-                <th class="table-col-included" title="Only included comps are used when reports are generated.">Included in Report?</th><th>Rank</th><th>Title</th><th>Source</th><th>Status</th><th>Reviews</th><th>Fit</th><th>Classification</th><th>Confidence</th><th>Reasoning / Notes</th>
+                <th class="table-col-details" aria-label="Details"></th><th class="table-col-included" title="Only included comps are used when reports are generated.">Included in Report?</th><th>Rank</th><th>Title</th><th class="table-col-source">Source</th><th class="table-col-status">Status</th><th>Reviews</th><th>Fit</th><th class="table-col-classification">Classification</th><th>Confidence</th><th>Reasoning / Notes</th>
               </tr>
             </thead>
-            <tbody id="summaryTable"><tr><td colspan="10">No run loaded.</td></tr></tbody>
+            <tbody id="summaryTable"><tr><td colspan="11">No run loaded.</td></tr></tbody>
           </table>
         </div>
       </section>
@@ -386,7 +470,7 @@
 
     const state = {
       organizations: [], games: [], runs: [], recentRows: [], currentRun: null, currentGame: null,
-      controls: [], candidates: [], reports: [], events: [], candidateFilter: 'all', candidateSearch: '', candidateSort: 'final_rank', candidateSortDirection: 'asc', editingControlId: null, activeStep: null, expandedCandidateId: null, pendingCandidateIds: new Set(),
+      controls: [], candidates: [], reports: [], events: [], candidateFilter: 'all', candidateSearch: '', candidateSort: 'final_rank', candidateSortDirection: 'asc', editingControlId: null, activeStep: null, expandedCandidateId: null, pendingCandidateIds: new Set(), appAssets: {},
     };
 
     const workflowSteps = [
@@ -411,6 +495,11 @@
     function escapeHtml(value) {
       return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     }
+    function formatPillValue(value) {
+      const text = String(value || 'unknown').replaceAll('_', ' ').trim();
+      if (!text) return 'Unknown';
+      return text.charAt(0).toUpperCase() + text.slice(1);
+    }
     function parseSteamAppid(value) {
       const text = String(value || '').trim();
       if (!text) return null;
@@ -427,10 +516,10 @@
     }
     function statusPill(status) {
       const cls = status === 'completed' ? 'completed' : status === 'running' || status === 'queued' ? 'running' : status === 'failed' ? 'failed' : '';
-      return `<span class="pill ${cls}">${escapeHtml(status || 'unknown')}</span>`;
+      return `<span class="pill ${cls}">${escapeHtml(formatPillValue(status))}</span>`;
     }
     function badge(label, cls = 'badge-gray') {
-      return `<span class="badge ${cls}">${escapeHtml(label || '—')}</span>`;
+      return `<span class="badge ${cls}">${escapeHtml(formatPillValue(label || '—'))}</span>`;
     }
     function statusBadge(status) {
       if (status === 'completed' || status === 'confirmed' || status === 'selected_for_report') return badge(status, 'badge-green');
@@ -443,7 +532,7 @@
       if (classification === 'audience_comp') return badge('Audience Comp', 'badge-blue');
       if (classification === 'commercial_benchmark') return badge('Benchmark', 'badge-amber');
       if (classification === 'low_fit' || classification === 'noise') return badge(classification === 'noise' ? 'Noise' : 'Low Fit', 'badge-gray');
-      if (classification) return badge(classification.replaceAll('_', ' '), 'badge-gray');
+      if (classification) return badge(classification, 'badge-gray');
       return '';
     }
     function controlBadge(controlType) {
@@ -524,7 +613,7 @@
         <tr>
           <td>${escapeHtml(row.game.title || 'Unknown game')}</td>
           <td>${escapeHtml(row.run.name || '(unnamed run)')}</td>
-          <td>${statusBadge(row.run.status)}</td>
+          <td class="recent-run-status">${statusBadge(row.run.status)}</td>
           <td>${escapeHtml(row.run.current_stage || '—')}</td>
           <td>${row.candidateCount}</td>
           <td>${row.reportCount}</td>
@@ -627,16 +716,27 @@
       $('loadedRunTitle').textContent = run.name || '(unnamed run)';
       const loadedRunStatusPill = $('loadedRunStatusPill');
       loadedRunStatusPill.className = `pill ${run.status === 'completed' ? 'completed' : run.status === 'running' || run.status === 'queued' ? 'running' : run.status === 'failed' ? 'failed' : ''}`;
-      loadedRunStatusPill.textContent = run.status || 'unknown';
+      loadedRunStatusPill.textContent = formatPillValue(run.status);
       const org = state.organizations.find(item => item.id === run.organization_id) || {};
+      const includedCount = state.candidates.filter(item => item.is_selected_for_report).length;
+      const directCount = state.candidates.filter(item => item.classification === 'direct_comp').length;
       $('loadedRunDetails').innerHTML = `
-        <div class="run-detail-grid">
-          <div class="run-detail-line"><strong>Game:</strong> ${escapeHtml(game.title || 'Unknown game')} · <strong>Steam App ID:</strong> ${escapeHtml(game.steam_appid || '—')} ${game.steam_url ? `· <a href="${escapeHtml(game.steam_url)}" target="_blank">Steam page</a>` : ''}</div>
-          <div class="run-detail-line compact"><strong>Status:</strong> ${escapeHtml(run.status || '—')} · <strong>Stage:</strong> ${escapeHtml(run.current_stage || '—')} · <strong>Workspace:</strong> ${escapeHtml(org.name || org.slug || run.organization_id || '—')} · <strong>Updated:</strong> ${escapeHtml(formatDate(run.updated_at || run.created_at))} · <strong>Run ID:</strong> ${escapeHtml(run.id || '—')}</div>
+        <div class="loaded-run-meta">
+          <strong>Game:</strong> ${escapeHtml(game.title || 'Unknown game')} · <strong>Steam App ID:</strong> ${escapeHtml(game.steam_appid || '—')} ${game.steam_url ? `· <a href="${escapeHtml(game.steam_url)}" target="_blank" rel="noreferrer">Steam page</a>` : ''}
+          <br />
+          <strong>Workspace:</strong> ${escapeHtml(org.name || org.slug || run.organization_id || '—')} · <strong>Updated:</strong> ${escapeHtml(formatDate(run.updated_at || run.created_at))} · <strong>Run ID:</strong> ${escapeHtml(run.id || '—')}
+        </div>
+        <div class="loaded-run-stats">
+          <div class="stat-card"><strong>${state.candidates.length}</strong><span>Candidates</span></div>
+          <div class="stat-card"><strong>${includedCount}</strong><span>Included comps</span></div>
+          <div class="stat-card"><strong>${directCount}</strong><span>Direct comps</span></div>
+          <div class="stat-card"><strong>${state.controls.length}</strong><span>Guidance items</span></div>
+          <div class="stat-card"><strong>${state.reports.length}</strong><span>Reports</span></div>
+          <div class="stat-card"><strong>${escapeHtml(formatPillValue(run.current_stage || '—'))}</strong><span>Current stage</span></div>
         </div>
       `;
-      $('progressStage').textContent = run.current_stage || '—';
-      $('progressStatus').textContent = run.status || '—';
+      $('progressStage').textContent = formatPillValue(run.current_stage || '—');
+      $('progressStatus').textContent = formatPillValue(run.status || '—');
       if (run.status === 'failed' || run.failure_message) {
         $('runErrorBox').classList.remove('hidden');
         $('runErrorBox').innerHTML = `<strong>Research failed${run.current_stage ? ` during ${escapeHtml(run.current_stage)}` : ''}.</strong><br><br><strong>Error:</strong><br>${escapeHtml(run.failure_message || 'Unknown error')}`;
@@ -712,7 +812,7 @@
       $('stepper').innerHTML = workflowSteps.map((step, index) => {
         const status = stepStatus(step);
         const activeClass = step.key === state.activeStep ? ' active' : '';
-        return `<div class="step ${status}${activeClass}" data-step="${escapeHtml(step.key)}"><strong>${index + 1}. ${escapeHtml(step.name)}</strong><span>${escapeHtml(status)}${step.key === recommended ? ' · recommended' : ''}</span></div>`;
+        return `<div class="step ${status}${activeClass}" data-step="${escapeHtml(step.key)}"><strong>${index + 1}. ${escapeHtml(step.name)}</strong><span>${escapeHtml(formatPillValue(status))}${step.key === recommended ? ' · recommended' : ''}</span></div>`;
       }).join('');
       renderActiveStepPanel();
     }
@@ -724,7 +824,7 @@
       $('activeStepHelp').textContent = activeStepHelp(step.key);
       const statusPill = $('activeStepStatus');
       statusPill.className = `pill ${status}`;
-      statusPill.textContent = status;
+      statusPill.textContent = formatPillValue(status);
       $('activeStepPanel').innerHTML = activeStepHtml(step.key);
       renderControls();
       renderReports();
@@ -851,22 +951,64 @@
       const aria = included ? `Included in report for ${item.title || 'candidate'}` : `Not included in report for ${item.title || 'candidate'}`;
       return `<button type="button" role="switch" aria-checked="${included ? 'true' : 'false'}" aria-label="${escapeHtml(aria)}" class="include-toggle ${cls}${pending ? ' saving' : ''}" data-id="${escapeHtml(item.candidate_id)}" data-context="${escapeHtml(context)}" ${pending ? 'disabled' : ''}>${label}</button>`;
     }
+    function extractSteamAsset(app) {
+      const raw = app?.raw_appdetails_json?.raw || app?.raw_appdetails_json || {};
+      const screenshot = Array.isArray(raw.screenshots) && raw.screenshots.length ? raw.screenshots[0] : null;
+      const pageSignals = app?.raw_page_signals_json || {};
+      return {
+        appid: app?.appid,
+        name: app?.name || raw.name,
+        headerImage: raw.header_image || null,
+        screenshotThumb: screenshot?.path_thumbnail || null,
+        screenshotFull: screenshot?.path_full || null,
+        steamUrl: app?.steam_url || (app?.appid ? `https://store.steampowered.com/app/${app.appid}/` : null),
+        tags: (pageSignals.tags || []).map(tag => tag.name).filter(Boolean),
+      };
+    }
+    async function ensureSteamAsset(appid) {
+      if (!appid || state.appAssets[appid]) return state.appAssets[appid];
+      state.appAssets[appid] = { loading: true };
+      renderCandidateSummary();
+      try {
+        const rows = await fetchJson('steam_apps', `appid=${encodeURIComponent(appid)}`);
+        const app = Array.isArray(rows) && rows.length ? rows[0] : null;
+        state.appAssets[appid] = app ? extractSteamAsset(app) : { error: 'No Steam asset found.' };
+      } catch (error) {
+        state.appAssets[appid] = { error: error.message || 'Unable to load Steam screenshot.' };
+      }
+      renderCandidateSummary();
+      return state.appAssets[appid];
+    }
+    function candidateMediaHtml(item) {
+      const asset = state.appAssets[item.steam_appid];
+      if (!item.steam_appid) return '<div class="candidate-media"><div class="candidate-media-empty">No Steam App ID available for screenshot.</div></div>';
+      if (!asset || asset.loading) return '<div class="candidate-media"><div class="candidate-media-empty">Loading Steam screenshot…</div></div>';
+      if (asset.error) return `<div class="candidate-media"><div class="candidate-media-empty">${escapeHtml(asset.error)}</div></div>`;
+      const image = asset.screenshotFull || asset.screenshotThumb || asset.headerImage;
+      if (!image) return '<div class="candidate-media"><div class="candidate-media-empty">No Steam screenshot available.</div></div>';
+      return `<div class="candidate-media"><a href="${escapeHtml(asset.steamUrl || '#')}" target="_blank" rel="noreferrer"><img src="${escapeHtml(image)}" alt="Steam screenshot for ${escapeHtml(item.title || 'candidate')}" loading="lazy" /></a></div>`;
+    }
     function renderCandidateSummary() {
       const rows = sortedCandidates(state.candidates.filter(candidateMatchesFilter).filter(candidateMatchesSearch));
       if (!rows.length) {
-        $('summaryTable').innerHTML = '<tr><td colspan="10">No candidates for this filter/search.</td></tr>';
+        state.expandedCandidateId = null;
+        $('summaryTable').innerHTML = '<tr><td colspan="11">No candidates for this filter/search.</td></tr>';
         return;
       }
+      if (state.expandedCandidateId && !rows.some(item => item.candidate_id === state.expandedCandidateId)) {
+        state.expandedCandidateId = null;
+      }
       $('summaryTable').innerHTML = rows.map(item => `
-        <tr>
+        <tr class="${state.expandedCandidateId === item.candidate_id ? 'candidate-row-expanded' : ''}">
+          <td><button type="button" class="btn btn-ghost details-toggle" data-id="${escapeHtml(item.candidate_id)}" aria-expanded="${state.expandedCandidateId === item.candidate_id ? 'true' : 'false'}" aria-controls="candidate-details-${escapeHtml(item.candidate_id)}" aria-label="${state.expandedCandidateId === item.candidate_id ? 'Hide' : 'Show'} details for ${escapeHtml(item.title || 'candidate')}">${state.expandedCandidateId === item.candidate_id ? '⌄' : '▸'}</button></td>
           <td>${includeToggleHtml(item)}</td>
           <td>${escapeHtml(item.final_rank || '')}</td>
-          <td><span class="title-cell-main"><span class="candidate-title">${escapeHtml(item.title || '')}</span> <button class="btn btn-ghost show-details" data-id="${escapeHtml(item.candidate_id)}">Details</button></span></td>
-          <td>${sourceBadge(item.primary_source)}</td>
-          <td>${statusBadge(item.pipeline_status)}</td>
+          <td><span class="title-cell-main"><span class="candidate-title">${escapeHtml(item.title || '')}</span></span></td>
+          <td class="candidate-col-source">${sourceBadge(item.primary_source)}</td>
+          <td class="candidate-col-status">${statusBadge(item.pipeline_status)}</td>
           <td>${escapeHtml(item.review_count || 0)}</td>
           <td>${item.fit_score == null ? '' : Number(item.fit_score).toFixed(1)}</td>
-          <td>${classificationBadge(item.classification)}</td>
+          <td class="candidate-col-classification">${classificationBadge(item.classification)}</td>
           <td>${item.confidence == null ? '' : Number(item.confidence).toFixed(2)}</td>
           <td>${escapeHtml(item.reasoning || item.overlapping_tags || '')}</td>
         </tr>
@@ -876,22 +1018,30 @@
     function candidateDetailsRow(item) {
       return `
         <tr>
-          <td colspan="10">
-            <div class="help">
-              <strong>${escapeHtml(item.title || 'Candidate details')}</strong><br />
-              <strong>Included in Report?</strong> ${includeToggleHtml(item, 'details')}<br />
-              <strong>Classification:</strong> ${classificationBadge(item.classification) || '—'} ·
-              <strong>Source:</strong> ${sourceBadge(item.primary_source) || '—'} ·
-              <strong>Control:</strong> ${controlBadge(item.user_control_type) || '—'}<br />
-              <strong>Steam App ID:</strong> ${escapeHtml(item.steam_appid || '—')} ·
-              <strong>Required:</strong> ${item.is_user_required ? badge('Required', 'badge-purple') : 'No'} ·
-              <strong>Benchmark:</strong> ${item.is_benchmark_only ? badge('Benchmark', 'badge-amber') : 'No'}<br />
-              <strong>Fit Score:</strong> ${item.fit_score == null ? '—' : Number(item.fit_score).toFixed(1)} ·
-              <strong>Confidence:</strong> ${item.confidence == null ? '—' : Number(item.confidence).toFixed(2)} ·
-              <strong>Reviews:</strong> ${escapeHtml(item.review_count || 0)}<br />
-              <strong>Overlapping Tags:</strong> ${escapeHtml(Array.isArray(item.overlapping_tags) ? item.overlapping_tags.join(', ') : item.overlapping_tags || '—')}<br />
-              <strong>Reasoning:</strong> ${escapeHtml(item.reasoning || '—')}<br />
-              <span class="small"><strong>Advanced/debug:</strong> backend excluded flag = ${item.is_user_excluded ? 'true' : 'false'}, pipeline status = ${escapeHtml(item.pipeline_status || '—')}</span>
+          <td colspan="11">
+            <div class="candidate-detail-card" id="candidate-details-${escapeHtml(item.candidate_id)}">
+              <div class="candidate-detail-header">
+                <div class="candidate-detail-title">${escapeHtml(item.title || 'Candidate details')}</div>
+                <button type="button" class="btn btn-ghost hide-details" data-id="${escapeHtml(item.candidate_id)}">Hide details</button>
+              </div>
+              <div class="candidate-detail-layout">
+                ${candidateMediaHtml(item)}
+                <div class="candidate-detail-grid">
+                  <div class="candidate-detail-meta">
+                    ${includeToggleHtml(item, 'details')}
+                    ${classificationBadge(item.classification) || ''}
+                    ${sourceBadge(item.primary_source) || ''}
+                    ${controlBadge(item.user_control_type) || ''}
+                    ${item.is_user_required ? badge('Required', 'badge-purple') : ''}
+                    ${item.is_benchmark_only ? badge('Benchmark', 'badge-amber') : ''}
+                  </div>
+                  <div><span class="detail-label">Steam App ID:</span> ${escapeHtml(item.steam_appid || '—')}</div>
+                  <div><span class="detail-label">Fit:</span> ${item.fit_score == null ? '—' : Number(item.fit_score).toFixed(1)} · <span class="detail-label">Confidence:</span> ${item.confidence == null ? '—' : Number(item.confidence).toFixed(2)} · <span class="detail-label">Reviews:</span> ${escapeHtml(item.review_count || 0)}</div>
+                  <div><span class="detail-label">Overlapping Tags:</span> ${escapeHtml(Array.isArray(item.overlapping_tags) ? item.overlapping_tags.join(', ') : item.overlapping_tags || '—')}</div>
+                  <div><span class="detail-label">Reasoning:</span> ${escapeHtml(item.reasoning || '—')}</div>
+                  <div class="small"><span class="detail-label">Advanced/debug:</span> backend excluded flag = ${item.is_user_excluded ? 'true' : 'false'}, pipeline status = ${escapeHtml(item.pipeline_status || '—')}</div>
+                </div>
+              </div>
             </div>
           </td>
         </tr>
@@ -1211,8 +1361,13 @@
       if (target.classList.contains('include-toggle')) {
         toggleCandidateInclusion(candidateId);
       }
-      if (target.classList.contains('show-details')) {
+      if (target.classList.contains('details-toggle')) {
         state.expandedCandidateId = state.expandedCandidateId === candidateId ? null : candidateId;
+        renderCandidateSummary();
+        if (state.expandedCandidateId === candidateId) ensureSteamAsset(candidate.steam_appid);
+      }
+      if (target.classList.contains('hide-details')) {
+        state.expandedCandidateId = null;
         renderCandidateSummary();
       }
     });

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 import os
 import sys
 from http.server import HTTPServer, SimpleHTTPRequestHandler
@@ -58,6 +59,20 @@ def ensure_steam_app(steam_appid: int, name: str | None = None) -> requests.Resp
 class CandidateUIHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path.startswith('/assets/'):
+            assets_dir = (Path(__file__).resolve().parent.parent / 'assets').resolve()
+            asset_path = (assets_dir / parsed.path.removeprefix('/assets/')).resolve()
+            if not asset_path.is_relative_to(assets_dir) or not asset_path.is_file():
+                self.send_error(404, 'Asset not found')
+                return
+            self.send_response(200)
+            content_type, _ = mimetypes.guess_type(asset_path.name)
+            self.send_header('Content-Type', content_type or 'application/octet-stream')
+            self.send_header('Content-Length', str(asset_path.stat().st_size))
+            self.end_headers()
+            with asset_path.open('rb') as asset_file:
+                self.wfile.write(asset_file.read())
+            return
         if parsed.path == '/config':
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
@@ -82,6 +97,14 @@ class CandidateUIHandler(SimpleHTTPRequestHandler):
             if organization_id:
                 params['organization_id'] = f'eq.{organization_id}'
             response = proxy_request('GET', 'games', params)
+            self.respond_proxy(response)
+            return
+        if api_path == 'steam_apps':
+            appid = query.get('appid', [''])[0]
+            if not appid:
+                self.send_error(400, 'Missing appid query parameter')
+                return
+            response = proxy_request('GET', 'steam_apps', {'select': 'appid,name,steam_url,raw_appdetails_json,raw_page_signals_json', 'appid': f'eq.{appid}', 'limit': '1'})
             self.respond_proxy(response)
             return
         if api_path == 'research_runs':
