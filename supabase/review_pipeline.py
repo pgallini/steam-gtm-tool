@@ -28,12 +28,15 @@ REVIEW_INSIGHT_SCHEMA = {
             'praise_themes': {'type': 'array', 'items': {'type': 'string'}},
             'complaint_themes': {'type': 'array', 'items': {'type': 'string'}},
             'friction_points': {'type': 'array', 'items': {'type': 'string'}},
+            'feature_expectations': {'type': 'array', 'items': {'type': 'string'}},
             'positioning_language': {'type': 'array', 'items': {'type': 'string'}},
             'pricing_sentiment': {'type': 'string'},
             'opportunities': {'type': 'array', 'items': {'type': 'string'}},
+            'risks_for_similar_game': {'type': 'array', 'items': {'type': 'string'}},
+            'recommended_actions': {'type': 'array', 'items': {'type': 'string'}},
             'summary': {'type': 'string'},
         },
-        'required': ['praise_themes', 'complaint_themes', 'friction_points', 'positioning_language', 'pricing_sentiment', 'opportunities', 'summary'],
+        'required': ['praise_themes', 'complaint_themes', 'friction_points', 'feature_expectations', 'positioning_language', 'pricing_sentiment', 'opportunities', 'risks_for_similar_game', 'recommended_actions', 'summary'],
     },
     'strict': True,
 }
@@ -50,9 +53,12 @@ REVIEW_ROLLUP_SCHEMA = {
             'shared_friction_points': {'type': 'array', 'items': {'type': 'string'}},
             'audience_expectations': {'type': 'array', 'items': {'type': 'string'}},
             'positioning_opportunities': {'type': 'array', 'items': {'type': 'string'}},
+            'product_implications': {'type': 'array', 'items': {'type': 'string'}},
+            'messaging_recommendations': {'type': 'array', 'items': {'type': 'string'}},
+            'research_next_steps': {'type': 'array', 'items': {'type': 'string'}},
             'summary': {'type': 'string'},
         },
-        'required': ['shared_praise_themes', 'shared_complaint_themes', 'shared_friction_points', 'audience_expectations', 'positioning_opportunities', 'summary'],
+        'required': ['shared_praise_themes', 'shared_complaint_themes', 'shared_friction_points', 'audience_expectations', 'positioning_opportunities', 'product_implications', 'messaging_recommendations', 'research_next_steps', 'summary'],
     },
     'strict': True,
 }
@@ -236,13 +242,24 @@ def sample_phrases(texts: list[str], limit: int = 6) -> list[str]:
     return phrases
 
 
-def compact_reviews(texts: list[str], limit: int = 18, max_chars: int = 700) -> list[str]:
+def compact_reviews(texts: list[str], limit: int = 50, max_chars: int = 1000) -> list[str]:
     compact: list[str] = []
     for text in texts[:limit]:
         clean = ' '.join((text or '').split())
         if clean:
             compact.append(clean[:max_chars])
     return compact
+
+
+def review_quality_score(review: dict[str, Any]) -> float:
+    raw = review.get('raw_review_json') or {}
+    weighted = raw.get('weighted_vote_score') or 0
+    try:
+        weighted_score = float(weighted)
+    except (TypeError, ValueError):
+        weighted_score = 0.0
+    text = review.get('review_text') or ''
+    return float(as_int(review.get('helpful_votes'))) + weighted_score + min(len(text) / 500.0, 2.0)
 
 
 def llm_build_candidate_insight(candidate: dict[str, Any], positives: list[str], negatives: list[str], model: str) -> dict[str, Any]:
@@ -252,6 +269,7 @@ You are a senior go-to-market strategist for PC/Steam games.
 Analyze recent Steam reviews for one competitor. Extract practical GTM insights only from the supplied reviews. Do not browse.
 
 Focus on repeat praise drivers, repeat complaint/risk drivers, friction points, player language worth borrowing/avoiding, pricing/value sentiment, and positioning opportunities for a similar game.
+Also extract category feature expectations, risks for a similar game, and recommended marketing/product actions.
 Be concise and specific.
 """.strip()
     payload = {
@@ -286,8 +304,10 @@ def build_candidate_insight(candidate: dict[str, Any]) -> dict[str, Any] | None:
     if not appid:
         return None
     reviews = client.select('steam_reviews', '*', {'steam_appid': f'eq.{appid}', 'order': 'fetched_at.desc', 'limit': '80'})
-    positives = [r.get('review_text') or '' for r in reviews if r.get('voted_up') is True]
-    negatives = [r.get('review_text') or '' for r in reviews if r.get('voted_up') is False]
+    positive_rows = sorted([r for r in reviews if r.get('voted_up') is True and r.get('review_text')], key=review_quality_score, reverse=True)
+    negative_rows = sorted([r for r in reviews if r.get('voted_up') is False and r.get('review_text')], key=review_quality_score, reverse=True)
+    positives = [r.get('review_text') or '' for r in positive_rows]
+    negatives = [r.get('review_text') or '' for r in negative_rows]
     if not positives and not negatives:
         return None
 
@@ -309,6 +329,9 @@ def build_candidate_insight(candidate: dict[str, Any]) -> dict[str, Any] | None:
         positioning_language = llm_output.get('positioning_language') or []
         opportunities = llm_output.get('opportunities') or []
         friction_points = llm_output.get('friction_points') or complaints[:5]
+        feature_expectations = llm_output.get('feature_expectations') or []
+        risks_for_similar_game = llm_output.get('risks_for_similar_game') or friction_points[:5]
+        recommended_actions = llm_output.get('recommended_actions') or opportunities[:5]
         pricing_sentiment = llm_output.get('pricing_sentiment') or None
         summary = llm_output.get('summary') or f"LLM review insight for {candidate.get('title')}."
     else:
@@ -325,6 +348,9 @@ def build_candidate_insight(candidate: dict[str, Any]) -> dict[str, Any] | None:
         if not opportunities:
             opportunities.append('Use competitor review language to sharpen Steam page promises and risk mitigation.')
         friction_points = complaints[:5]
+        feature_expectations = [theme.replace('_', ' ') for theme in (praise + complaints)[:8]]
+        risks_for_similar_game = [theme.replace('_', ' ') for theme in complaints[:6]]
+        recommended_actions = opportunities[:6]
         pricing_sentiment = 'value/price mentioned' if 'value_price' in praise or 'value_price' in complaints else None
         summary = f"Rule-based review scan for {candidate.get('title')}: {len(positives)} positive and {len(negatives)} negative recent reviews analyzed."
 
@@ -340,8 +366,16 @@ def build_candidate_insight(candidate: dict[str, Any]) -> dict[str, Any] | None:
         'summary': summary,
         'prompt_version': prompt_version,
         'model_version': model_version,
-        'llm_input_json': {'positive_count': len(positives), 'negative_count': len(negatives)},
-        'llm_output_json': llm_output or {'praise_themes': praise, 'complaint_themes': complaints, 'opportunities': opportunities},
+        'llm_input_json': {'positive_count': len(positives), 'negative_count': len(negatives), 'max_positive': 50, 'max_negative': 50},
+        'llm_output_json': llm_output
+        or {
+            'praise_themes': praise,
+            'complaint_themes': complaints,
+            'feature_expectations': feature_expectations,
+            'positioning_opportunities': opportunities,
+            'risks_for_similar_game': risks_for_similar_game,
+            'recommended_actions': recommended_actions,
+        },
     }
     response = client.insert('candidate_review_insights', payload, returning='representation')
     return response[0] if isinstance(response, list) else response
@@ -363,6 +397,7 @@ Focus on common praise drivers, common risks/frictions, audience expectations, a
                 'friction_points': row.get('friction_points') or [],
                 'positioning_language': row.get('positioning_language') or [],
                 'opportunities': row.get('opportunities') or [],
+                'details': row.get('llm_output_json') or {},
             }
             for row in insights[:12]
         ]
@@ -407,6 +442,9 @@ def rollup_review_insights(run_id: str) -> dict[str, Any] | None:
         shared_friction_points = llm_output.get('shared_friction_points') or []
         audience_expectations = llm_output.get('audience_expectations') or []
         positioning_opportunities = llm_output.get('positioning_opportunities') or []
+        product_implications = llm_output.get('product_implications') or []
+        messaging_recommendations = llm_output.get('messaging_recommendations') or []
+        research_next_steps = llm_output.get('research_next_steps') or []
         summary = llm_output.get('summary') or f'LLM rollup across {len(insights)} candidate review insight records.'
     else:
         praise = Counter(theme for row in insights for theme in (row.get('praise_themes') or []))
@@ -419,6 +457,9 @@ def rollup_review_insights(run_id: str) -> dict[str, Any] | None:
         shared_friction_points = [theme for theme, _ in complaints.most_common(8)]
         audience_expectations = [theme for theme, _ in (praise + complaints).most_common(8)]
         positioning_opportunities = list(dict.fromkeys(opportunities))[:10]
+        product_implications = [f'Plan around recurring {theme.replace("_", " ")} expectations.' for theme in audience_expectations[:6]]
+        messaging_recommendations = positioning_opportunities[:6]
+        research_next_steps = ['Compare Steam page positioning across Tier 1 direct comps.', 'Review negative-review friction points before final page copy.', 'Validate price/value language against selected benchmarks.']
         summary = f'Rule-based rollup across {len(insights)} candidate review insight records.'
     payload = {
         'run_id': run_id,
@@ -431,17 +472,74 @@ def rollup_review_insights(run_id: str) -> dict[str, Any] | None:
         'prompt_version': prompt_version,
         'model_version': model_version,
         'llm_input_json': {'insight_count': len(insights)},
-        'llm_output_json': llm_output or {'insight_count': len(insights)},
+        'llm_output_json': llm_output
+        or {
+            'insight_count': len(insights),
+            'product_implications': product_implications,
+            'messaging_recommendations': messaging_recommendations,
+            'research_next_steps': research_next_steps,
+        },
     }
     response = client.insert('run_review_rollups', payload, returning='representation')
     return response[0] if isinstance(response, list) else response
+
+
+def latest_review_classifications(run_id: str) -> dict[str, dict[str, Any]]:
+    rows = client.select('candidate_classifications', '*', {'run_id': f'eq.{run_id}', 'order': 'created_at.desc'})
+    latest: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        candidate_id = str(row.get('candidate_id'))
+        if candidate_id and candidate_id not in latest:
+            latest[candidate_id] = row
+    return latest
+
+
+def tier1_direct_candidate_ids(run_id: str) -> set[str]:
+    candidate_ids: set[str] = set()
+    for candidate_id, row in latest_review_classifications(run_id).items():
+        output = row.get('llm_output_json') or {}
+        confidence = float(row.get('confidence') or 0)
+        direct = float(row.get('direct_fit_score') or 0)
+        if row.get('classification') == 'direct_comp' and (output.get('priority_tier') == 'Tier 1' or (direct >= 80 and confidence >= 0.8)):
+            candidate_ids.add(candidate_id)
+    return candidate_ids
+
+
+def candidate_lookup(run_id: str) -> dict[str, dict[str, Any]]:
+    rows = client.select('run_candidates', '*', {'run_id': f'eq.{run_id}'})
+    return {str(row.get('id')): row for row in rows}
+
+
+def clean_md(value: Any) -> str:
+    return ' '.join(str(value or '').split())
+
+
+def list_lines(items: list[Any], fallback: str) -> list[str]:
+    return [f'- {clean_md(item)}' for item in items if clean_md(item)] or [fallback]
 
 
 def generate_review_report(run_id: str, rollup: dict[str, Any] | None) -> dict[str, Any] | None:
     run = one('research_runs', {'id': f'eq.{run_id}'})
     if not run or not rollup:
         return None
-    lines = [f"# Steam Review Insights Report: {run.get('name') or run_id}", '', rollup.get('summary') or '', '']
+    insights = client.select('candidate_review_insights', '*', {'run_id': f'eq.{run_id}', 'order': 'created_at.asc'})
+    candidates = candidate_lookup(run_id)
+    rollup_details = rollup.get('llm_output_json') or {}
+    lines = [f"# Tier 1 Steam Review Insights: {run.get('name') or run_id}", '']
+    lines.append('This report summarizes positive and negative Steam reviews for Tier 1 direct comps, then rolls those insights up into category expectations and positioning opportunities.')
+    lines.append('')
+    lines.append('## Games Analyzed')
+    lines.append('')
+    for insight in insights:
+        candidate = candidates.get(str(insight.get('candidate_id'))) or {}
+        lines.append(f"- **{clean_md(candidate.get('title') or insight.get('candidate_id'))}** (`{candidate.get('steam_appid') or 'unknown appid'}`)")
+    if not insights:
+        lines.append('_No per-game review insights were generated._')
+    lines.append('')
+    lines.append('## Cross-Game Takeaways')
+    lines.append('')
+    lines.append(rollup.get('summary') or '')
+    lines.append('')
     lines.append('## Shared Praise Themes')
     lines.extend([f'- {theme}' for theme in rollup.get('shared_praise_themes') or []] or ['_No shared praise themes found._'])
     lines.append('')
@@ -450,6 +548,42 @@ def generate_review_report(run_id: str, rollup: dict[str, Any] | None) -> dict[s
     lines.append('')
     lines.append('## Positioning Opportunities')
     lines.extend([f'- {item}' for item in rollup.get('positioning_opportunities') or []] or ['_No positioning opportunities found._'])
+    lines.append('')
+    lines.append('## Product Implications')
+    lines.extend(list_lines(rollup_details.get('product_implications') or [], '_No product implications found._'))
+    lines.append('')
+    lines.append('## Messaging Recommendations')
+    lines.extend(list_lines(rollup_details.get('messaging_recommendations') or [], '_No messaging recommendations found._'))
+    lines.append('')
+    lines.append('## Recommended Research Next Steps')
+    lines.extend(list_lines(rollup_details.get('research_next_steps') or [], '_No research next steps found._'))
+    for insight in insights:
+        candidate = candidates.get(str(insight.get('candidate_id'))) or {}
+        details = insight.get('llm_output_json') or {}
+        lines.append('')
+        lines.append('---')
+        lines.append('')
+        lines.append(f"## {clean_md(candidate.get('title') or insight.get('candidate_id'))}")
+        lines.append('')
+        lines.append(clean_md(insight.get('summary')))
+        lines.append('')
+        lines.append('### Praise Themes')
+        lines.extend(list_lines(insight.get('praise_themes') or [], '_No praise themes found._'))
+        lines.append('')
+        lines.append('### Complaint Themes')
+        lines.extend(list_lines(insight.get('complaint_themes') or [], '_No complaint themes found._'))
+        lines.append('')
+        lines.append('### Feature Expectations')
+        lines.extend(list_lines(details.get('feature_expectations') or [], '_No feature expectations found._'))
+        lines.append('')
+        lines.append('### Positioning Opportunities')
+        lines.extend(list_lines(insight.get('opportunities') or details.get('positioning_opportunities') or [], '_No positioning opportunities found._'))
+        lines.append('')
+        lines.append('### Risks for Similar Games')
+        lines.extend(list_lines(details.get('risks_for_similar_game') or [], '_No risks found._'))
+        lines.append('')
+        lines.append('### Recommended Actions')
+        lines.extend(list_lines(details.get('recommended_actions') or [], '_No recommended actions found._'))
     payload = {
         'run_id': run_id,
         'organization_id': run['organization_id'],
@@ -469,18 +603,21 @@ def runReviewPipeline(run_id: str) -> dict[str, Any]:
     if not run:
         raise ValueError(f'Research run {run_id} not found')
     config = run.get('run_config') or {}
-    max_pages = as_int(config.get('review_max_pages'), 1)
-    candidate_limit = as_int(config.get('review_candidate_limit'), 3)
+    max_pages = as_int(config.get('review_max_pages'), 3)
+    candidate_limit = as_int(config.get('review_candidate_limit'), 50)
     language = config.get('review_language', 'english')
-    num_per_page = as_int(config.get('review_num_per_page'), 20)
+    num_per_page = as_int(config.get('review_num_per_page'), 100)
 
     updateResearchRunStatus(run_id, 'running', current_stage='review_collection')
     addRunEvent(run_id, 'review_collection', 'stage_started', 'Review collection started', {'candidate_limit': candidate_limit, 'max_pages': max_pages})
-    candidates = client.select(
+    selected_candidates = client.select(
         'run_candidates',
         '*',
-        {'run_id': f'eq.{run_id}', 'is_selected_for_report': 'eq.true', 'order': 'final_rank.asc.nullslast', 'limit': str(candidate_limit)},
+        {'run_id': f'eq.{run_id}', 'is_selected_for_report': 'eq.true', 'order': 'final_rank.asc.nullslast'},
     )
+    tier1_ids = tier1_direct_candidate_ids(run_id)
+    tier1_candidates = [candidate for candidate in selected_candidates if str(candidate.get('id')) in tier1_ids]
+    candidates = (tier1_candidates or selected_candidates)[:candidate_limit]
     collection_results = []
     for candidate in candidates:
         try:
