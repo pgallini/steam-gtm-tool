@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import html
 import math
 import os
 import re
@@ -13,13 +14,15 @@ from bs4 import BeautifulSoup
 from openai import OpenAI
 
 from .client import SupabaseClient
-from .research_run_service import addRunEvent, prepareRunCandidates, updateResearchRunStatus
+from .pipeline_logging import log_step, log_step_event
+from .research_run_service import addRunEvent, addRunProgressEvent, markCandidateSetChangedAfterApproval, prepareRunCandidates, updateResearchRunStatus
 from .review_pipeline import runReviewPipeline
 from .steam_store import fetch_app_details, fetch_page_signals, normalize_app_details
 from .steam_utils import canonical_steam_url
 
 
 client = SupabaseClient()
+
 
 VALID_CLASSIFICATIONS = {
     'direct_comp',
@@ -102,6 +105,26 @@ DISCOVERY_STRATEGY_SCHEMA = {
 
 def utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def parse_model_json(output_text: str, *, context: str) -> dict[str, Any]:
+    text = (output_text or '').strip()
+    if not text:
+        raise ValueError(f'{context} returned empty JSON output')
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        start_candidates = [index for index in (text.find('{'), text.find('[')) if index != -1]
+        if not start_candidates:
+            raise
+        start = min(start_candidates)
+        end = max(text.rfind('}'), text.rfind(']'))
+        if end <= start:
+            raise
+        parsed = json.loads(text[start:end + 1])
+    if not isinstance(parsed, dict):
+        raise ValueError(f'{context} returned non-object JSON')
+    return parsed
 
 
 def one(table: str, filters: dict[str, str], select: str = '*') -> dict[str, Any] | None:
@@ -210,11 +233,11 @@ def snapshot_payload(app_payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def upsert_enriched_steam_app(appid: int, *, country: str = 'us', language: str = 'english') -> dict[str, Any]:
-    raw_detail = fetch_app_details(appid, country=country, language=language)
+def upsert_enriched_steam_app(appid: int, *, country: str = 'us', language: str = 'english', run_id: str | None = None) -> dict[str, Any]:
+    raw_detail = fetch_app_details(appid, country=country, language=language, run_id=run_id)
     detail = normalize_app_details(appid, raw_detail)
     try:
-        page_signals = fetch_page_signals(appid, country=country, language=language)
+        page_signals = fetch_page_signals(appid, country=country, language=language, run_id=run_id)
     except Exception as exc:
         existing = one('steam_apps', {'appid': f'eq.{appid}'}) or {}
         page_signals = existing.get('raw_page_signals_json') or {'appid': appid, 'error': str(exc), 'tags': [], 'basic_info': {}}
@@ -310,7 +333,7 @@ def get_llm_discovery_strategy(
             }
         },
     )
-    strategy = json.loads(response.output_text)
+    strategy = parse_model_json(response.output_text, context='Discovery strategy')
     strategy['anchor_tags'] = (strategy.get('anchor_tags') or [])[:max_anchor_tags]
     strategy['supporting_tags'] = (strategy.get('supporting_tags') or [])[:max_supporting_tags]
     strategy['search_queries'] = (strategy.get('search_queries') or [])[:max_queries]
@@ -373,7 +396,75 @@ def search_steam_text(query: str, *, max_results: int, country: str, language: s
         timeout=30,
     )
     response.raise_for_status()
-    payload = response.json()
+    try:
+        payload = response.json()
+    except Exception:
+        return []
+    soup = BeautifulSoup(payload.get('results_html') or '', 'html.parser')
+    results: list[dict[str, Any]] = []
+    for row in soup.select('a.search_result_row'):
+        appid_raw = row.get('data-ds-appid')
+        if not appid_raw:
+            match = re.search(r'/app/(\d+)', row.get('href', ''))
+            appid_raw = match.group(1) if match else None
+        if not appid_raw:
+            continue
+        title_el = row.select_one('.title')
+        results.append({'appid': as_int(appid_raw), 'title': title_el.get_text(strip=True) if title_el else None, 'source_url': row.get('href')})
+        if len(results) >= max_results:
+            break
+    return results
+
+
+def tag_id_for_name(seed_tags: list[dict[str, Any]], tag_name: str) -> int | None:
+    for tag in seed_tags:
+        if tag.get('name') == tag_name and str(tag.get('tagid') or '').isdigit():
+            return int(tag['tagid'])
+    return None
+
+
+def search_steam_by_tag_ids(tag_ids: list[int], *, max_results: int) -> list[dict[str, Any]]:
+    response = requests.get(
+        'https://store.steampowered.com/search/',
+        params={'tags': ','.join(str(tag_id) for tag_id in tag_ids), 'ndl': '1'},
+        headers={'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US,en;q=0.9'},
+        timeout=30,
+    )
+    response.raise_for_status()
+    soup = BeautifulSoup(response.text, 'html.parser')
+    results: list[dict[str, Any]] = []
+    for row in soup.select('a.search_result_row'):
+        appid_raw = row.get('data-ds-appid')
+        if not appid_raw:
+            match = re.search(r'/app/(\d+)', row.get('href', ''))
+            appid_raw = match.group(1) if match else None
+        if not appid_raw:
+            continue
+        title_el = row.select_one('.title')
+        results.append(
+            {
+                'appid': as_int(appid_raw),
+                'title': title_el.get_text(strip=True) if title_el else None,
+                'source_url': response.url,
+            }
+        )
+        if len(results) >= max_results:
+            break
+    return results
+
+
+def search_steam_text(query: str, *, max_results: int, country: str, language: str) -> list[dict[str, Any]]:
+    response = requests.get(
+        'https://store.steampowered.com/search/results/',
+        params={'term': query, 'cc': country, 'l': language},
+        headers={'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US,en;q=0.9'},
+        timeout=30,
+    )
+    response.raise_for_status()
+    try:
+        payload = response.json()
+    except Exception:
+        return []
     soup = BeautifulSoup(payload.get('results_html') or '', 'html.parser')
     results: list[dict[str, Any]] = []
     for row in soup.select('a.search_result_row'):
@@ -426,6 +517,214 @@ def add_discovered_candidate(run: dict[str, Any], appid: int, rank: int, source_
         candidate = response[0] if isinstance(response, list) else response
 
     if candidate:
+        log_step('02_discover_candidates', run_id=run['id'], message='Added discovered candidate', appid=appid, source=source, rank=rank, title=candidate.get('title'))
+        evidence = {
+            'candidate_id': candidate['id'],
+            'run_id': run['id'],
+            'source': source,
+            'query': source_payload.get('query') or ', '.join(source_payload.get('tags') or []) or f"seed:{source_payload.get('seed_appid')}",
+            'source_rank': rank,
+            'source_score': None,
+            'evidence_notes': source_payload.get('evidence_notes') or 'Discovered by automated Steam candidate discovery.',
+            'raw_evidence_json': source_payload,
+        }
+        client.insert('candidate_discovery_evidence', evidence, returning='minimal')
+    return candidate
+
+
+def add_tag_discovery_results(
+    run: dict[str, Any],
+    *,
+    seed_tags: list[dict[str, Any]],
+    tag_names: list[str],
+    rank_offset: int,
+    max_results: int,
+    source: str,
+    country: str,
+    language: str,
+) -> int:
+    tag_ids: list[int] = []
+    for tag_name in tag_names:
+        tag_id = tag_id_for_name(seed_tags, tag_name)
+        if tag_id is None:
+            addRunEvent(run['id'], 'discovery', 'tag_id_missing', f'No Steam tag ID found for {tag_name}', {'tag': tag_name})
+            return 0
+        tag_ids.append(tag_id)
+
+    added = 0
+    for rank, result in enumerate(search_steam_by_tag_ids(tag_ids, max_results=max_results), start=rank_offset):
+        appid = as_int(result.get('appid'))
+        if not appid:
+            continue
+        try:
+            upsert_enriched_steam_app(appid, country=country, language=language)
+            add_discovered_candidate(
+                run,
+                appid,
+                rank,
+                {
+                    'candidate_source': source,
+                    'source_method': 'steam_tag_id_search',
+                    'tags': tag_names,
+                    'tag_ids': tag_ids,
+                    'source_url': result.get('source_url'),
+                    'title': result.get('title'),
+                    'evidence_notes': 'Discovered from Steam tag ID search.',
+                },
+            )
+            added += 1
+        except Exception as exc:
+            addRunEvent(run['id'], 'discovery', 'tag_candidate_failed', f'Failed to add tag-discovered app {appid}', {'error': str(exc), 'tags': tag_names})
+    return added
+
+
+def add_text_discovery_results(
+    run: dict[str, Any],
+    *,
+    query: str,
+    rank_offset: int,
+    max_results: int,
+    country: str,
+    language: str,
+) -> int:
+    added = 0
+    for rank, result in enumerate(search_steam_text(query, max_results=max_results, country=country, language=language), start=rank_offset):
+        appid = as_int(result.get('appid'))
+        if not appid:
+            continue
+        try:
+            upsert_enriched_steam_app(appid, country=country, language=language)
+            add_discovered_candidate(
+                run,
+                appid,
+                rank,
+                {
+                    'candidate_source': 'tag_search',
+                    'source_method': 'steam_text_search',
+                    'query': query,
+                    'source_url': result.get('source_url'),
+                    'title': result.get('title'),
+                    'evidence_notes': 'Discovered from Steam text search generated by the discovery strategy.',
+                },
+            )
+            added += 1
+        except Exception as exc:
+            addRunEvent(run['id'], 'discovery', 'text_search_candidate_failed', f'Failed to add text-search app {appid}', {'error': str(exc), 'query': query})
+    return added
+
+def extract_more_like_this_appids(soup: BeautifulSoup) -> list[int]:
+    appids: list[int] = []
+    for element in soup.select('[data-featuretarget="storeitems-carousel"]'):
+        raw_props = element.get('data-props')
+        if not raw_props:
+            continue
+        try:
+            props = json.loads(html.unescape(raw_props))
+        except Exception:
+            continue
+        if props.get('title', '').lower() != 'more like this':
+            continue
+        for appid in props.get('appIDs', []):
+            if isinstance(appid, int):
+                appids.append(appid)
+    return appids
+
+
+def search_steam_by_tag_ids(tag_ids: list[int], *, max_results: int) -> list[dict[str, Any]]:
+    response = requests.get(
+        'https://store.steampowered.com/search/',
+        params={'tags': ','.join(str(tag_id) for tag_id in tag_ids), 'ndl': '1'},
+        headers={'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US,en;q=0.9'},
+        timeout=30,
+    )
+    response.raise_for_status()
+    soup = BeautifulSoup(response.text, 'html.parser')
+    results: list[dict[str, Any]] = []
+    for row in soup.select('a.search_result_row'):
+        appid_raw = row.get('data-ds-appid')
+        if not appid_raw:
+            match = re.search(r'/app/(\d+)', row.get('href', ''))
+            appid_raw = match.group(1) if match else None
+        if not appid_raw:
+            continue
+        title_el = row.select_one('.title')
+        results.append(
+            {
+                'appid': as_int(appid_raw),
+                'title': title_el.get_text(strip=True) if title_el else None,
+                'source_url': response.url,
+            }
+        )
+        if len(results) >= max_results:
+            break
+    return results
+
+
+def search_steam_text(query: str, *, max_results: int, country: str, language: str) -> list[dict[str, Any]]:
+    response = requests.get(
+        'https://store.steampowered.com/search/results/',
+        params={'term': query, 'cc': country, 'l': language},
+        headers={'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US,en;q=0.9'},
+        timeout=30,
+    )
+    response.raise_for_status()
+    try:
+        payload = response.json()
+    except Exception:
+        return []
+    soup = BeautifulSoup(payload.get('results_html') or '', 'html.parser')
+    results: list[dict[str, Any]] = []
+    for row in soup.select('a.search_result_row'):
+        appid_raw = row.get('data-ds-appid')
+        if not appid_raw:
+            match = re.search(r'/app/(\d+)', row.get('href', ''))
+            appid_raw = match.group(1) if match else None
+        if not appid_raw:
+            continue
+        title_el = row.select_one('.title')
+        results.append({'appid': as_int(appid_raw), 'title': title_el.get_text(strip=True) if title_el else None, 'source_url': row.get('href')})
+        if len(results) >= max_results:
+            break
+    return results
+
+
+def get_run_and_game(run_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    run = one('research_runs', {'id': f'eq.{run_id}'})
+    if not run:
+        raise ValueError(f'Research run {run_id} not found')
+    game = one('games', {'id': f"eq.{run['game_id']}"})
+    if not game:
+        raise ValueError(f"Game {run['game_id']} for run {run_id} not found")
+    return run, game
+
+
+def existing_candidate_by_appid(run_id: str, appid: int) -> dict[str, Any] | None:
+    return one('run_candidates', {'run_id': f'eq.{run_id}', 'steam_appid': f'eq.{appid}'})
+
+
+def add_discovered_candidate(run: dict[str, Any], appid: int, rank: int, source_payload: dict[str, Any]) -> dict[str, Any] | None:
+    existing = existing_candidate_by_appid(run['id'], appid)
+    app = one('steam_apps', {'appid': f'eq.{appid}'}) or {'name': f'Steam App {appid}'}
+    source = source_payload.get('candidate_source') or 'steam_more_like_this'
+    if existing:
+        candidate = existing
+    else:
+        payload = {
+            'run_id': run['id'],
+            'organization_id': run['organization_id'],
+            'steam_appid': appid,
+            'title': app.get('name') or f'Steam App {appid}',
+            'steam_url': canonical_steam_url(appid),
+            'primary_source': source,
+            'pipeline_status': 'discovered',
+            'discovery_rank': rank,
+            'raw_candidate_json': source_payload,
+        }
+        response = client.insert('run_candidates', payload, returning='representation')
+        candidate = response[0] if isinstance(response, list) else response
+
+    if candidate:
+        log_step('02_discover_candidates', run_id=run['id'], message='Added discovered candidate', appid=appid, source=source, rank=rank, title=candidate.get('title'))
         evidence = {
             'candidate_id': candidate['id'],
             'run_id': run['id'],
@@ -522,6 +821,7 @@ def add_text_discovery_results(
 
 
 def enrich_run(run_id: str) -> dict[str, Any]:
+    require_prior_stage(run_id, 'enrichment', 'discovery', 'Known Games & Guidance')
     run, game = get_run_and_game(run_id)
     config = run.get('run_config') or {}
     country = config.get('country', 'us')
@@ -535,12 +835,23 @@ def enrich_run(run_id: str) -> dict[str, Any]:
 
     updateResearchRunStatus(run_id, 'running', current_stage='enrichment')
     addRunEvent(run_id, 'enrichment', 'stage_started', 'Steam enrichment started')
+    log_step_event('02_discover_candidates', 'started', run_id=run_id, message='Started candidate discovery and enrichment', seed_appid=game.get('steam_appid'))
 
     enriched_appids: set[int] = set()
+    games_processed = 0
     seed_appid = game.get('steam_appid')
     if seed_appid:
-        upsert_enriched_steam_app(as_int(seed_appid), country=country, language=language)
+        upsert_enriched_steam_app(as_int(seed_appid), country=country, language=language, run_id=run_id)
         enriched_appids.add(as_int(seed_appid))
+        games_processed += 1
+        addRunProgressEvent(
+            run_id,
+            'enrichment',
+            games_processed,
+            unit='games',
+            message='Discovering and enriching candidates',
+            details={'appid': as_int(seed_appid), 'title': game.get('title')},
+        )
 
     candidates = client.select('run_candidates', '*', {'run_id': f'eq.{run_id}', 'order': 'created_at.asc'})
     for candidate in candidates:
@@ -551,10 +862,19 @@ def enrich_run(run_id: str) -> dict[str, Any]:
         if appid in enriched_appids:
             continue
         try:
-            upsert_enriched_steam_app(appid, country=country, language=language)
+            upsert_enriched_steam_app(appid, country=country, language=language, run_id=run_id)
             enriched_appids.add(appid)
             if candidate.get('pipeline_status') == 'discovered':
                 client.update('run_candidates', {'id': f"eq.{candidate['id']}"}, {'pipeline_status': 'enriched'}, returning='minimal')
+            games_processed += 1
+            addRunProgressEvent(
+                run_id,
+                'enrichment',
+                games_processed,
+                unit='games',
+                message='Discovering and enriching candidates',
+                details={'candidate_id': candidate['id'], 'appid': appid, 'title': candidate.get('title')},
+            )
         except Exception as exc:
             addRunEvent(run_id, 'enrichment', 'candidate_enrichment_failed', f'Failed to enrich app {appid}', {'error': str(exc)})
 
@@ -568,7 +888,7 @@ def enrich_run(run_id: str) -> dict[str, Any]:
                 continue
             try:
                 if appid not in enriched_appids:
-                    upsert_enriched_steam_app(appid, country=country, language=language)
+                    upsert_enriched_steam_app(appid, country=country, language=language, run_id=run_id)
                     enriched_appids.add(appid)
                 add_discovered_candidate(
                     run,
@@ -582,6 +902,15 @@ def enrich_run(run_id: str) -> dict[str, Any]:
                     },
                 )
                 discovered += 1
+                games_processed += 1
+                addRunProgressEvent(
+                    run_id,
+                    'enrichment',
+                    games_processed,
+                    unit='games',
+                    message='Discovering and enriching candidates',
+                    details={'appid': appid, 'source': 'more_like_this', 'rank': rank},
+                )
             except Exception as exc:
                 addRunEvent(run_id, 'discovery', 'more_like_this_candidate_failed', f'Failed to add MLT app {appid}', {'error': str(exc)})
 
@@ -614,7 +943,7 @@ def enrich_run(run_id: str) -> dict[str, Any]:
         rank_offset = discovery_limit + 1
         anchor_tags = strategy.get('anchor_tags') or []
         for tag_name in anchor_tags:
-            discovered += add_tag_discovery_results(
+            added_count = add_tag_discovery_results(
                 run,
                 seed_tags=seed_tags,
                 tag_names=[tag_name],
@@ -624,28 +953,51 @@ def enrich_run(run_id: str) -> dict[str, Any]:
                 country=country,
                 language=language,
             )
+            discovered += added_count
+            games_processed += added_count
+            if added_count:
+                addRunProgressEvent(
+                    run_id,
+                    'enrichment',
+                    games_processed,
+                    unit='games',
+                    message='Discovering and enriching candidates',
+                    details={'query': tag_name, 'source': 'tag_search', 'added_count': added_count, 'discovered_count': discovered},
+                )
             rank_offset += max_results_per_search
             if discovery_sleep > 0:
                 time.sleep(discovery_sleep)
 
         for left_index in range(len(anchor_tags)):
             for right_index in range(left_index + 1, len(anchor_tags)):
-                discovered += add_tag_discovery_results(
+                tag_pair = [anchor_tags[left_index], anchor_tags[right_index]]
+                added_count = add_tag_discovery_results(
                     run,
                     seed_tags=seed_tags,
-                    tag_names=[anchor_tags[left_index], anchor_tags[right_index]],
+                    tag_names=tag_pair,
                     rank_offset=rank_offset,
                     max_results=max_results_per_search,
                     source='tag_combination_search',
                     country=country,
                     language=language,
                 )
+                discovered += added_count
+                games_processed += added_count
+                if added_count:
+                    addRunProgressEvent(
+                        run_id,
+                        'enrichment',
+                        games_processed,
+                        unit='games',
+                        message='Discovering and enriching candidates',
+                        details={'query': ' + '.join(tag_pair), 'source': 'tag_combination_search', 'added_count': added_count, 'discovered_count': discovered},
+                    )
                 rank_offset += max_results_per_search
                 if discovery_sleep > 0:
                     time.sleep(discovery_sleep)
 
         for query in add_default_anchor_queries(strategy, max_search_queries):
-            discovered += add_text_discovery_results(
+            added_count = add_text_discovery_results(
                 run,
                 query=query,
                 rank_offset=rank_offset,
@@ -653,25 +1005,25 @@ def enrich_run(run_id: str) -> dict[str, Any]:
                 country=country,
                 language=language,
             )
+            discovered += added_count
+            games_processed += added_count
+            if added_count:
+                addRunProgressEvent(
+                    run_id,
+                    'enrichment',
+                    games_processed,
+                    unit='games',
+                    message='Discovering and enriching candidates',
+                    details={'query': query, 'source': 'text_search', 'added_count': added_count, 'discovered_count': discovered},
+                )
             rank_offset += max_results_per_search
             if discovery_sleep > 0:
                 time.sleep(discovery_sleep)
 
     addRunEvent(run_id, 'enrichment', 'stage_completed', 'Steam enrichment completed', {'enriched_app_count': len(enriched_appids), 'discovered_count': discovered})
+    addRunEvent(run_id, 'enrichment', 'stage_completed', 'Discover and enrich candidates completed', {'processed_count': games_processed, 'unit': 'games', 'enriched_app_count': len(enriched_appids), 'discovered_count': discovered})
+    log_step_event('02_discover_candidates', 'completed', run_id=run_id, message='Completed candidate discovery and enrichment', enriched_app_count=len(enriched_appids), discovered_count=discovered)
     return {'enriched_app_count': len(enriched_appids), 'discovered_count': discovered}
-
-
-def weighted_tag_score(seed_tags: list[str], candidate_tags: list[str]) -> tuple[int, list[str]]:
-    seed_norm = [tag.lower() for tag in seed_tags]
-    candidate_norm = {tag.lower() for tag in candidate_tags}
-    score = 0
-    overlaps: list[str] = []
-    for index, tag in enumerate(seed_norm):
-        if tag in candidate_norm:
-            weight = max(1, 20 - index)
-            score += weight
-            overlaps.append(seed_tags[index])
-    return score, overlaps
 
 
 def candidate_filter_result(
@@ -702,11 +1054,27 @@ def candidate_filter_result(
     return True, 'kept'
 
 
+def weighted_tag_score(seed_tags: list[str], candidate_tags: list[str]) -> tuple[int, list[str]]:
+    seed_normalized = [tag.lower() for tag in seed_tags]
+    candidate_normalized = {tag.lower() for tag in candidate_tags}
+    score = 0
+    overlaps: list[str] = []
+
+    for index, tag in enumerate(seed_normalized):
+        if tag in candidate_normalized:
+            weight = max(1, 20 - index)
+            score += weight
+            overlaps.append(seed_tags[index])
+
+    return score, overlaps
+
+
 def shortlist_reason_payload(reasons: list[str]) -> dict[str, Any]:
     return {'shortlist_reasons': reasons}
 
 
 def score_run(run_id: str) -> dict[str, Any]:
+    require_prior_stage(run_id, 'scoring', 'enrichment', 'Discover and Enrich Candidates')
     run, game = get_run_and_game(run_id)
     config = run.get('run_config') or {}
     min_reviews = as_int(run.get('min_review_count'), 1000)
@@ -722,6 +1090,9 @@ def score_run(run_id: str) -> dict[str, Any]:
 
     updateResearchRunStatus(run_id, 'running', current_stage='scoring')
     addRunEvent(run_id, 'scoring', 'stage_started', 'Candidate scoring started')
+    log_step_event('04_filter_candidates', 'started', run_id=run_id, message='Started candidate filtering')
+    log_step_event('05_score_more_like_this', 'started', run_id=run_id, message='Started candidate scoring')
+    log_step_event('06_shortlist_candidates', 'started', run_id=run_id, message='Started candidate shortlisting')
 
     seed_appid = as_int(game.get('steam_appid'))
     seed_app = one('steam_apps', {'appid': f'eq.{seed_appid}'}) if seed_appid else None
@@ -730,9 +1101,18 @@ def score_run(run_id: str) -> dict[str, Any]:
     candidates = client.select('run_candidates', '*', {'run_id': f'eq.{run_id}'})
     scored: list[dict[str, Any]] = []
     filtered_count = 0
-    for candidate in candidates:
+    for index, candidate in enumerate(candidates, start=1):
         if candidate.get('is_user_excluded'):
             client.update('run_candidates', {'id': f"eq.{candidate['id']}"}, {'pipeline_status': 'excluded_by_user'}, returning='minimal')
+            addRunProgressEvent(
+                run_id,
+                'scoring',
+                index,
+                len(candidates),
+                unit='games',
+                message='Filtering, scoring, and shortlisting candidates',
+                details={'candidate_id': candidate['id'], 'title': candidate.get('title'), 'status': 'excluded_by_user'},
+            )
             continue
         appid = candidate.get('steam_appid')
         app = one('steam_apps', {'appid': f'eq.{as_int(appid)}'}) if appid else None
@@ -758,6 +1138,16 @@ def score_run(run_id: str) -> dict[str, Any]:
                 returning='minimal',
             )
             filtered_count += 1
+            log_step('04_filter_candidates', run_id=run_id, message='Filtered candidate out', candidate_id=candidate['id'], appid=appid, reason=filter_reason)
+            addRunProgressEvent(
+                run_id,
+                'scoring',
+                index,
+                len(candidates),
+                unit='games',
+                message='Filtering, scoring, and shortlisting candidates',
+                details={'candidate_id': candidate['id'], 'title': candidate.get('title'), 'status': 'filtered_out', 'reason': filter_reason},
+            )
             continue
         candidate_tags = (app or {}).get('tags') or []
         tag_score, overlaps = weighted_tag_score(seed_tags, candidate_tags)
@@ -790,6 +1180,16 @@ def score_run(run_id: str) -> dict[str, Any]:
             'score_details': {'rule': 'weighted tag overlap plus commercial/review signal', 'filter_reason': filter_reason},
         }
         client.insert('candidate_scores', score_payload, upsert=True, on_conflict='candidate_id,scoring_version', returning='minimal')
+        log_step('05_score_more_like_this', run_id=run_id, message='Scored candidate', candidate_id=candidate['id'], appid=appid, fit_score=round(fit_score, 4), review_count=review_count, overlap_count=len(overlaps))
+        addRunProgressEvent(
+            run_id,
+            'scoring',
+            index,
+            len(candidates),
+            unit='games',
+            message='Filtering, scoring, and shortlisting candidates',
+            details={'candidate_id': candidate['id'], 'title': candidate.get('title'), 'fit_score': round(fit_score, 4)},
+        )
         scored.append(
             {
                 'candidate': candidate,
@@ -810,6 +1210,7 @@ def score_run(run_id: str) -> dict[str, Any]:
             selected = selected_by_id.setdefault(candidate_id, item)
             if reason not in selected['shortlist_reasons']:
                 selected['shortlist_reasons'].append(reason)
+                log_step('06_shortlist_candidates', run_id=run_id, message='Added shortlist lane reason', candidate_id=candidate_id, appid=item['candidate'].get('steam_appid'), reason=reason)
 
     by_fit = sorted(scored, key=lambda item: (item['score'], item['overlap_count'], item['review_count']), reverse=True)
     by_reviews = sorted(scored, key=lambda item: (item['review_count'], item['score'], item['overlap_count']), reverse=True)
@@ -826,10 +1227,12 @@ def score_run(run_id: str) -> dict[str, Any]:
             selected = selected_by_id.setdefault(item['candidate']['id'], item)
             if 'user_required' not in selected['shortlist_reasons']:
                 selected['shortlist_reasons'].append('user_required')
+                log_step('06_shortlist_candidates', run_id=run_id, message='Promoted user-required candidate', candidate_id=item['candidate']['id'], appid=item['candidate'].get('steam_appid'))
         if item['candidate'].get('is_benchmark_only'):
             selected = selected_by_id.setdefault(item['candidate']['id'], item)
             if 'benchmark_only' not in selected['shortlist_reasons']:
                 selected['shortlist_reasons'].append('benchmark_only')
+                log_step('06_shortlist_candidates', run_id=run_id, message='Promoted benchmark-only candidate', candidate_id=item['candidate']['id'], appid=item['candidate'].get('steam_appid'))
 
     selected_items = sorted(
         selected_by_id.values(),
@@ -857,8 +1260,12 @@ def score_run(run_id: str) -> dict[str, Any]:
         'scoring',
         'stage_completed',
         'Candidate scoring completed',
-        {'scored_count': len(scored), 'filtered_count': filtered_count, 'selected_count': len(selected_items), 'shortlist_lanes': {'top_fit': top_fit, 'top_reviewed': top_reviewed, 'top_anchor': top_anchor}},
+        {'processed_count': len(candidates), 'unit': 'games', 'scored_count': len(scored), 'filtered_count': filtered_count, 'selected_count': len(selected_items), 'shortlist_lanes': {'top_fit': top_fit, 'top_reviewed': top_reviewed, 'top_anchor': top_anchor}},
     )
+    log_step_event('04_filter_candidates', 'completed', run_id=run_id, message='Completed candidate filtering', filtered_count=filtered_count)
+    log_step_event('05_score_more_like_this', 'completed', run_id=run_id, message='Completed candidate scoring', scored_count=len(scored))
+    log_step('06_shortlist_candidates', run_id=run_id, message='Shortlist complete', scored_count=len(scored), filtered_count=filtered_count, selected_count=len(selected_items), shortlist_max_candidates=max_candidates)
+    log_step_event('06_shortlist_candidates', 'completed', run_id=run_id, message='Completed candidate shortlisting', selected_count=len(selected_items), shortlist_max_candidates=max_candidates)
     return {'scored_count': len(scored), 'filtered_count': filtered_count, 'selected_count': len(selected_items), 'shortlist_max_candidates': max_candidates}
 
 
@@ -1108,29 +1515,48 @@ Classification guidance:
 Important: user-required games should not automatically become direct comps; benchmark-only games should usually be commercial_benchmark unless they are also truly direct.
 Keep reasoning concise and practical.
 """.strip()
-    payload = {'candidates': [compact_candidate_for_llm(row) for row in rows]}
-    response = OpenAI().responses.create(
-        model=model,
-        input=[
-            {'role': 'system', 'content': system_prompt},
-            {'role': 'user', 'content': json.dumps(payload, ensure_ascii=False)},
-        ],
-        text={
-            'format': {
-                'type': 'json_schema',
-                'name': LLM_CLASSIFICATION_SCHEMA['name'],
-                'schema': LLM_CLASSIFICATION_SCHEMA['schema'],
-                'strict': True,
-            }
-        },
-    )
-    parsed = json.loads(response.output_text)
-    return {str(item['candidate_id']): item for item in parsed.get('candidates') or []}
+    batch_size = max(1, as_int(os.getenv('STEAM_GTM_LLM_CLASSIFICATION_BATCH_SIZE'), 25))
+    results: dict[str, dict[str, Any]] = {}
+
+    def classify_batch(batch_rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+        payload = {'candidates': [compact_candidate_for_llm(row) for row in batch_rows]}
+        response = OpenAI().responses.create(
+            model=model,
+            input=[
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': json.dumps(payload, ensure_ascii=False)},
+            ],
+            text={
+                'format': {
+                    'type': 'json_schema',
+                    'name': LLM_CLASSIFICATION_SCHEMA['name'],
+                    'schema': LLM_CLASSIFICATION_SCHEMA['schema'],
+                    'strict': True,
+                }
+            },
+        )
+        parsed = parse_model_json(response.output_text, context='Classification results')
+        return {str(item['candidate_id']): item for item in parsed.get('candidates') or []}
+
+    for start in range(0, len(rows), batch_size):
+        batch_rows = rows[start:start + batch_size]
+        try:
+            results.update(classify_batch(batch_rows))
+            continue
+        except Exception:
+            for batch_row in batch_rows:
+                try:
+                    results.update(classify_batch([batch_row]))
+                except Exception:
+                    continue
+    return results
 
 
 def classify_run(rule_id: str, run_id: str) -> dict[str, Any]:
+    require_prior_stage(run_id, 'classification', 'scoring', 'Filter, Score & Shortlist Candidates')
     updateResearchRunStatus(run_id, 'running', current_stage='classification')
     addRunEvent(run_id, 'classification', 'stage_started', 'Candidate classification started')
+    log_step_event('07_llm_classify_comps', 'started', run_id=run_id, message='Started competitor classification')
     rows = client.select('v_run_candidate_summary', '*', {'run_id': f'eq.{run_id}'})
     model = openai_model_name()
     prompt_version = rule_id
@@ -1158,7 +1584,7 @@ def classify_run(rule_id: str, run_id: str) -> dict[str, Any]:
             addRunEvent(run_id, 'classification', 'llm_classification_failed', 'OpenAI classification failed; falling back to rule-based classification', {'model': model, 'error': str(exc)})
 
     count = 0
-    for row in rows:
+    for index, row in enumerate(rows, start=1):
         llm_result = llm_results.get(str(row['candidate_id']))
         if llm_result:
             result = {
@@ -1204,16 +1630,28 @@ def classify_run(rule_id: str, run_id: str) -> dict[str, Any]:
             client.update('candidate_classifications', {'id': f"eq.{existing['id']}"}, payload, returning='minimal')
         else:
             client.insert('candidate_classifications', payload, returning='minimal')
+        log_step('07_llm_classify_comps', run_id=run_id, message='Classified candidate', candidate_id=row['candidate_id'], classification=payload['classification'], confidence=payload['confidence'])
         if row.get('pipeline_status') != 'excluded_by_user':
             client.update('run_candidates', {'id': f"eq.{row['candidate_id']}"}, {'pipeline_status': 'classified'}, returning='minimal')
         count += 1
-    addRunEvent(run_id, 'classification', 'stage_completed', 'Candidate classification completed', {'classified_count': count, 'model_version': model_version, 'prompt_version': prompt_version})
+        addRunProgressEvent(
+            run_id,
+            'classification',
+            index,
+            len(rows),
+            unit='games',
+            message='Classifying candidates',
+            details={'candidate_id': row['candidate_id'], 'title': row.get('title'), 'classification': payload['classification']},
+        )
+    addRunEvent(run_id, 'classification', 'stage_completed', 'Candidate classification completed', {'processed_count': count, 'unit': 'games', 'classified_count': count, 'model_version': model_version, 'prompt_version': prompt_version})
+    log_step_event('07_llm_classify_comps', 'completed', run_id=run_id, message='Completed competitor classification', classified_count=count, model_version=model_version, prompt_version=prompt_version)
     return {'classified_count': count, 'model_version': model_version, 'prompt_version': prompt_version}
 
 
 def generate_competitor_report(run_id: str) -> dict[str, Any]:
     run, _game = get_run_and_game(run_id)
     updateResearchRunStatus(run_id, 'running', current_stage='report_generation')
+    log_step_event('08_generate_comp_report', 'started', run_id=run_id, message='Started competitor report generation')
     rows = report_rows_with_classifications(run_id)
     selected = [row for row in rows if row.get('is_selected_for_report')]
     tier1 = sort_report_rows([row for row in selected if row.get('priority_tier') == 'Tier 1'], 'direct_fit_score', 'commercial_benchmark_score')
@@ -1305,7 +1743,9 @@ def generate_competitor_report(run_id: str) -> dict[str, Any]:
     }
     response = client.insert('reports', payload, returning='representation')
     report = response[0] if isinstance(response, list) else response
-    addRunEvent(run_id, 'report_generation', 'stage_completed', 'Competitor report generated', {'report_id': report.get('id') if report else None})
+    addRunEvent(run_id, 'report_generation', 'stage_completed', 'Competitor report generated', {'processed_count': len(rows), 'unit': 'candidates', 'report_id': report.get('id') if report else None, 'candidate_count': len(rows), 'selected_count': len(selected)})
+    log_step('08_generate_comp_report', run_id=run_id, message='Generated competitor report', report_id=report.get('id') if report else None, selected_candidate_count=len(selected), candidate_count=len(rows))
+    log_step_event('08_generate_comp_report', 'completed', run_id=run_id, message='Completed competitor report generation', report_id=report.get('id') if report else None)
     return {'report_id': report.get('id') if report else None, 'selected_candidate_count': len(selected), 'candidate_count': len(rows)}
 
 
@@ -1324,9 +1764,32 @@ def candidateSetIsApproved(run_id: str) -> bool:
     return not changed_at or changed_at <= approved_at
 
 
+def latest_stage_event_at(run_id: str, stage: str, event_type: str) -> str | None:
+    events = client.select(
+        'run_events',
+        '*',
+        {'run_id': f'eq.{run_id}', 'stage': f'eq.{stage}', 'event_type': f'eq.{event_type}', 'order': 'created_at.desc', 'limit': '1'},
+    )
+    if not events:
+        return None
+    return events[0].get('created_at')
+
+
+def stage_is_complete(run_id: str, stage: str) -> bool:
+    if stage == 'discovery':
+        return bool(latest_stage_event_at(run_id, 'discovery', 'stage_completed') or latest_stage_event_at(run_id, 'discovery', 'known_games_guidance_skipped'))
+    return bool(latest_stage_event_at(run_id, stage, 'stage_completed'))
+
+
+def require_prior_stage(run_id: str, stage: str, prior_stage: str, prior_label: str) -> None:
+    if not stage_is_complete(run_id, prior_stage):
+        raise RuntimeError(f'{prior_label} must be completed before {stage.replace("_", " ")} can start.')
+
+
 def buildCandidateUniverse(run_id: str) -> dict[str, Any]:
     """User-facing pipeline action: build and classify the candidate universe, but do not generate reports."""
     started = utc_now_iso()
+    approved_before_run = candidateSetIsApproved(run_id)
     addRunEvent(run_id, 'discovery', 'candidate_universe_started', 'Build Candidate Universe started')
     try:
         prepare_result = prepareRunCandidates(run_id)
@@ -1344,6 +1807,19 @@ def buildCandidateUniverse(run_id: str) -> dict[str, Any]:
             },
             returning='minimal',
         )
+        if approved_before_run:
+            markCandidateSetChangedAfterApproval(
+                run_id,
+                'classification',
+                'Candidate universe was rebuilt after approval',
+                {
+                    'prepare_count': prepare_result.get('count'),
+                    'enriched_app_count': enrich_result.get('enriched_app_count'),
+                    'discovered_count': enrich_result.get('discovered_count'),
+                    'scored_count': score_result.get('scored_count'),
+                    'classified_count': classify_result.get('classified_count'),
+                },
+            )
         addRunEvent(run_id, 'classification', 'candidate_universe_completed', 'Build Candidate Universe completed; candidates are ready for review')
         return {
             'status': 'needs_review',
@@ -1365,6 +1841,8 @@ def buildCandidateUniverse(run_id: str) -> dict[str, Any]:
 
 def generateReportsForRun(run_id: str, require_approval: bool = True) -> dict[str, Any]:
     """User-facing pipeline action: generate final reports from reviewed/selected candidates."""
+    if not stage_is_complete(run_id, 'classification'):
+        raise RuntimeError('Candidate classification must be completed before reports can be generated.')
     if require_approval and not candidateSetIsApproved(run_id):
         raise RuntimeError('Candidate set must be approved before reports can be generated.')
     addRunEvent(run_id, 'report_generation', 'reports_started', 'Generate Reports started')

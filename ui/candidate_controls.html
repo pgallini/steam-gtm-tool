@@ -173,6 +173,19 @@
     .step.skipped { background: var(--muted-surface); border-color: var(--border); }
     .step.active { outline: 0; background: var(--primary-soft); border-color: var(--primary); box-shadow: inset 0 0 0 1px rgba(90, 58, 136, 0.12); }
     .step { cursor: pointer; }
+    .progress-timeline { display: grid; gap: 10px; margin-top: 12px; }
+    .progress-step { border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; background: var(--card); }
+    .progress-step.running { background: var(--warn-soft); border-color: var(--warn-border); }
+    .progress-step.completed { background: var(--success-soft); border-color: var(--success-border); }
+    .progress-step.failed { background: var(--danger-soft); border-color: var(--danger-border); }
+    .progress-step.pending { background: var(--muted-surface); }
+    .progress-step-header { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+    .progress-step-icon { width: 20px; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; }
+    .progress-step.running .progress-step-icon { color: var(--warn); }
+    .progress-step.completed .progress-step-icon { color: var(--success); }
+    .progress-step.failed .progress-step-icon { color: var(--danger); }
+    .progress-step.pending .progress-step-icon { color: var(--muted); }
+    .progress-step-meta { margin-left: 30px; color: var(--muted); font-size: 12px; margin-top: 3px; }
     .loaded-run { margin-bottom: 16px; }
     .loaded-run-card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 24px; box-shadow: 0 1px 3px rgba(23, 32, 51, 0.05); }
     .loaded-run h2 { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
@@ -187,6 +200,9 @@
     .stat-card { border: 1px solid var(--border); background: #FAFBFD; border-radius: 14px; padding: 14px; }
     .stat-card strong { display: block; font-size: 20px; font-weight: 800; color: var(--text); }
     .stat-card span { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; }
+    .step-action-card { border: 1px solid var(--primary-border); background: linear-gradient(135deg, rgba(241, 236, 248, 0.8), rgba(255, 255, 255, 0.94)); border-radius: 16px; padding: 16px; }
+    .step-action-card .toolbar { align-items: flex-start; }
+    .step-action-requirements { margin-top: 8px; color: var(--muted); font-size: 12px; }
     .help { background: var(--primary-soft); border: 1px solid var(--primary-border); border-radius: 10px; padding: 10px 12px; color: var(--text); font-size: 13px; margin-top: 10px; }
     .control-help { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
     .control-help div { border: 1px solid var(--border); border-radius: 8px; padding: 8px; font-size: 12px; background: var(--muted-surface); }
@@ -380,6 +396,7 @@
           <button id="btnHideBackendDetails" class="btn btn-secondary">Hide</button>
         </div>
         <p><strong>Latest Backend Stage:</strong> <span id="progressStage">—</span> · <strong>Status:</strong> <span id="progressStatus">—</span></p>
+        <div id="runProgressTimeline" class="progress-timeline"></div>
         <div id="runErrorBox" class="error-box hidden"></div>
         <h3 style="margin-top:14px;">Recent Activity</h3>
         <ul id="eventsList" class="status"><li>No events loaded.</li></ul>
@@ -438,8 +455,7 @@
 
       <details class="advanced card section">
         <summary>Advanced / Admin Actions</summary>
-        <p class="status">Run Full Pipeline is retained for admin/dev use. It bypasses the normal user checkpoint between candidate review and report generation.</p>
-        <button id="btnRunPipeline" class="btn btn-secondary">Run Full Pipeline</button>
+        <p class="status">The sequential stage controls above now replace the one-click pipeline path for normal use.</p>
       </details>
     </section>
   </main>
@@ -470,7 +486,7 @@
 
     const state = {
       organizations: [], games: [], runs: [], recentRows: [], currentRun: null, currentGame: null,
-      controls: [], candidates: [], reports: [], events: [], candidateFilter: 'all', candidateSearch: '', candidateSort: 'final_rank', candidateSortDirection: 'asc', editingControlId: null, activeStep: null, expandedCandidateId: null, pendingCandidateIds: new Set(), appAssets: {},
+      controls: [], candidates: [], reports: [], events: [], candidateFilter: 'all', candidateSearch: '', candidateSort: 'final_rank', candidateSortDirection: 'asc', editingControlId: null, activeStep: null, expandedCandidateId: null, pendingCandidateIds: new Set(), appAssets: {}, workspaceRefreshPending: false, actionInFlight: false,
     };
 
     const workflowSteps = [
@@ -480,6 +496,17 @@
       { key: 'review', name: 'Review, Sort, Filter & Exclude Comps', stages: ['classification'] },
       { key: 'reports', name: 'Generate Reports', stages: ['report_generation', 'review_collection', 'review_analysis', 'completed'] },
     ];
+    const processSteps = [
+      { key: 'discovery', name: 'Apply Known Games & Guidance', unit: 'games' },
+      { key: 'enrichment', name: 'Discover and Enrich Candidates', unit: 'games' },
+      { key: 'scoring', name: 'Filter, Score & Shortlist Candidates', unit: 'games' },
+      { key: 'classification', name: 'Classify Candidates', unit: 'games' },
+      { key: 'review_collection', name: 'Collect Tier 1 Reviews', unit: 'games' },
+      { key: 'review_analysis', name: 'Summarize Review Insights', unit: 'games' },
+      { key: 'report_generation', name: 'Generate Reports', unit: 'candidates' },
+    ];
+    const processStepOrder = processSteps.map(step => step.key);
+    let progressPollTimer = null;
 
     const $ = (id) => document.getElementById(id);
     const globalStatus = $('globalStatus');
@@ -492,6 +519,10 @@
     const reportsList = $('reportsList');
 
     function buildUrl(path, query = '') { return `/api/${path}${query ? `?${query}` : ''}`; }
+    function setButtonDisabled(id, disabled) {
+      const button = $(id);
+      if (button) button.disabled = disabled;
+    }
     function escapeHtml(value) {
       return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     }
@@ -527,6 +558,161 @@
       if (status === 'failed' || status === 'error') return badge(status, 'badge-red');
       return badge(status || 'unknown', 'badge-gray');
     }
+    function latestRunEvent(stage, eventTypes = null) {
+      const events = state.events
+        .filter(event => event.stage === stage && (!eventTypes || eventTypes.includes(event.event_type)))
+        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+      return events[0] || null;
+    }
+    function processStageCompleted(stepKey) {
+      if (stepKey === 'discovery') return !!latestRunEvent('discovery', ['stage_completed']) || guidanceSkipped();
+      return !!latestRunEvent(stepKey, ['stage_completed']);
+    }
+    function processStageCanStart(stepKey) {
+      if (stepKey === 'discovery') return !processStageCompleted('discovery');
+      if (stepKey === 'enrichment') return processStageCompleted('discovery') && !processStageCompleted('enrichment');
+      if (stepKey === 'scoring') return processStageCompleted('enrichment') && !processStageCompleted('scoring');
+      if (stepKey === 'classification') return processStageCompleted('scoring') && !processStageCompleted('classification');
+      return false;
+    }
+    function processStageActionPath(stepKey) {
+      if (stepKey === 'discovery') return 'prepare_run_candidates';
+      if (stepKey === 'enrichment') return 'discover_and_enrich_candidates';
+      if (stepKey === 'scoring') return 'filter_score_shortlist_candidates';
+      if (stepKey === 'classification') return 'classify_candidates';
+      if (stepKey === 'report_generation') return 'generate_reports';
+      return null;
+    }
+    async function runProcessStage(stepKey) {
+      if (!state.currentRun) return;
+      const path = processStageActionPath(stepKey);
+      if (!path) return;
+      const stageLabel = processSteps.find(step => step.key === stepKey)?.name || stepKey;
+      state.actionInFlight = true;
+      updateProgressPanelVisibility();
+      startProgressPolling();
+      try {
+        const result = await fetchJson(path, '', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ run_id: state.currentRun.id }),
+        });
+        $('actionStatus').textContent = `Started ${stageLabel}. Status: ${result.status || 'ok'}.`;
+        await refreshWorkspaceData();
+        await refreshDashboard();
+      } catch (error) {
+        $('actionStatus').textContent = `Stage start failed: ${error.message}`;
+        await refreshWorkspaceData();
+      } finally {
+        state.actionInFlight = false;
+        stopProgressPolling();
+        updateProgressPanelVisibility();
+      }
+    }
+    function detailsCount(details, keys = []) {
+      if (!details || typeof details !== 'object') return null;
+      for (const key of keys) {
+        const value = details[key];
+        if (value === 0 || value === '0') return 0;
+        if (Array.isArray(value)) return value.length;
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string' && value.trim() && !Number.isNaN(Number(value))) return Number(value);
+        if (value) return value;
+      }
+      return null;
+    }
+    function processStepCount(stepKey, event) {
+      const details = event?.details || {};
+      if (stepKey === 'discovery') return detailsCount(details, ['processed_count', 'count']);
+      if (stepKey === 'enrichment') return detailsCount(details, ['processed_count', 'enriched_app_count', 'discovered_count']);
+      if (stepKey === 'scoring') return detailsCount(details, ['processed_count', 'scored_count']);
+      if (stepKey === 'classification') return detailsCount(details, ['processed_count', 'classified_count']);
+      if (stepKey === 'review_collection') return detailsCount(details, ['processed_count', 'collections', 'total_review_count', 'total']);
+      if (stepKey === 'review_analysis') return detailsCount(details, ['processed_count', 'insight_count']);
+      if (stepKey === 'report_generation') return detailsCount(details, ['processed_count', 'candidate_count', 'selected_count']);
+      return detailsCount(details, ['processed_count', 'count']);
+    }
+    function processStepUnit(stepKey, event) {
+      const unit = event?.details?.unit;
+      if (unit) return unit;
+      if (stepKey === 'report_generation') return 'candidates';
+      if (stepKey === 'review_collection') return 'games';
+      return 'games';
+    }
+    function processStepIndex(stepKey) {
+      const index = processStepOrder.indexOf(stepKey);
+      return index === -1 ? Number.POSITIVE_INFINITY : index;
+    }
+    function currentStageIndex() {
+      return processStepIndex(state.currentRun?.current_stage || '');
+    }
+    function processStepInfo(step) {
+      const stepIndex = processStepIndex(step.key);
+      const activeStageIndex = currentStageIndex();
+      const completedEventTypes = ['stage_completed', 'script_completed', 'candidate_universe_completed', 'reports_completed', 'pipeline_completed'];
+      const failedEventTypes = ['stage_failed', 'script_failed', 'candidate_universe_failed', 'reports_failed', 'pipeline_failed'];
+      const progressEvent = latestRunEvent(step.key, ['stage_progress']);
+      const completedEvent = latestRunEvent(step.key, completedEventTypes);
+      const failedEvent = latestRunEvent(step.key, failedEventTypes) || (state.currentRun?.status === 'failed' && state.currentRun?.current_stage === step.key ? state.currentRun : null);
+      if (failedEvent) {
+        return { status: 'failed', icon: '✕', text: failedEvent.failure_message || failedEvent.message || 'Failed' };
+      }
+      const isActiveStage = state.currentRun?.status === 'running' && state.currentRun?.current_stage === step.key;
+      if (isActiveStage || progressEvent) {
+        const event = progressEvent || latestRunEvent(step.key, ['stage_started']);
+        const count = processStepCount(step.key, event);
+        const unit = processStepUnit(step.key, event);
+        const total = detailsCount(event?.details || {}, ['total_count']);
+        const text = count != null
+          ? (total != null ? `${count} / ${total} ${unit} processed` : `${count} ${unit} processed`)
+          : 'Processing...';
+        return { status: 'running', icon: '●', text };
+      }
+      if (state.currentRun?.status === 'completed' || (state.currentRun?.status === 'running' && stepIndex < activeStageIndex) || completedEvent) {
+        const event = completedEvent || progressEvent;
+        const count = processStepCount(step.key, event);
+        const unit = processStepUnit(step.key, event);
+        return { status: 'completed', icon: '✓', text: count != null ? `${count} ${unit} processed` : 'Completed' };
+      }
+      return { status: 'pending', icon: '○', text: 'Waiting to start' };
+    }
+    function renderRunProgressTimeline() {
+      const timeline = $('runProgressTimeline');
+      if (!timeline) return;
+      if (!state.currentRun) {
+        timeline.innerHTML = '<div class="status">Load a run to see progress.</div>';
+        return;
+      }
+      timeline.innerHTML = processSteps.map(step => {
+        const info = processStepInfo(step);
+        return `
+          <div class="progress-step ${info.status}">
+            <div class="progress-step-header">
+              <span class="progress-step-icon" aria-hidden="true">${info.icon}</span>
+              <span>${escapeHtml(step.name)}</span>
+            </div>
+            <div class="progress-step-meta">${escapeHtml(info.text)}</div>
+          </div>
+        `;
+      }).join('');
+    }
+    function updateProgressPanelVisibility() {
+      const panel = $('runProgressPanel');
+      if (!panel) return;
+      const shouldShow = !!state.currentRun && (state.actionInFlight || state.currentRun.status === 'running' || state.currentRun.status === 'failed' || state.events.length > 0);
+      panel.classList.toggle('hidden', !shouldShow);
+    }
+    function startProgressPolling() {
+      if (progressPollTimer) return;
+      progressPollTimer = window.setInterval(() => {
+        if (!state.currentRun || !(state.actionInFlight || state.currentRun.status === 'running')) return;
+        refreshWorkspaceData().catch(() => {});
+      }, 2000);
+    }
+    function stopProgressPolling() {
+      if (progressPollTimer) window.clearInterval(progressPollTimer);
+      progressPollTimer = null;
+    }
     function classificationBadge(classification) {
       if (classification === 'direct_comp') return badge('Direct Comp', 'badge-purple');
       if (classification === 'audience_comp') return badge('Audience Comp', 'badge-blue');
@@ -556,6 +742,51 @@
       return data;
     }
     function selectedOrgId() { return workspaceSelect.value || DEFAULT_ORG_ID; }
+
+    function stepActionConfig(stepKey) {
+      if (!state.currentRun || !state.currentGame) {
+        return { label: 'Load a run first', message: 'Open a research run to enable step actions.', disabled: true };
+      }
+      if (stepKey === 'guidance') {
+        return {
+          label: 'Apply Known Games & Guidance',
+          message: state.controls.length ? 'Reapplies the saved guidance set before candidate discovery.' : 'Seed the run with known games, exclusions, and benchmarks.',
+          disabled: false,
+        };
+      }
+      if (stepKey === 'review') {
+        if (!candidateUniverseBuilt()) {
+          return { label: 'Confirm Comps for Report', message: 'Build the candidate universe before confirming report comps.', disabled: true };
+        }
+        return {
+          label: 'Confirm Comps for Report',
+          message: candidateSetChangedAfterApproval() ? 'The candidate set changed after approval. Re-confirm before generating reports.' : 'Approve the current candidate set so reports can be generated.',
+          disabled: false,
+        };
+      }
+      if (stepKey === 'reports') {
+        if (!candidateSetApproved()) {
+          return { label: 'Generate Reports', message: 'Confirm comps for report before generating reports.', disabled: true };
+        }
+        if (candidateSetChangedAfterApproval()) {
+          return { label: 'Generate Reports', message: 'The candidate set changed after approval. Re-confirm comps before generating reports.', disabled: true };
+        }
+        return {
+          label: reportsGenerated() ? 'Generate Updated Reports' : 'Generate Reports',
+          message: reportsGenerated() ? 'Regenerates the reports from the approved candidate set.' : 'Generate final reports from the approved candidate set.',
+          disabled: false,
+        };
+      }
+      return null;
+    }
+
+    function runActiveStepAction() {
+      const step = workflowSteps.find(item => item.key === state.activeStep);
+      if (!step) return;
+      if (step.key === 'guidance') return applyControls();
+      if (step.key === 'review') return confirmCompsForReport();
+      if (step.key === 'reports') return generateReports();
+    }
 
     function switchMode(mode) {
       dashboardMode.classList.toggle('active', mode === 'dashboard');
@@ -692,22 +923,27 @@
     }
 
     async function refreshWorkspaceData() {
-      if (!state.currentRun) return;
+      if (!state.currentRun || state.workspaceRefreshPending) return;
+      state.workspaceRefreshPending = true;
       const runId = state.currentRun.id;
-      const [controls, candidates, reports, events, freshRun] = await Promise.all([
-        fetchJson('run_candidate_controls', `run_id=${encodeURIComponent(runId)}`).catch(() => []),
-        fetchJson('v_run_candidate_summary', `run_id=${encodeURIComponent(runId)}`).catch(() => []),
-        fetchJson('reports', `run_id=${encodeURIComponent(runId)}`).catch(() => []),
-        fetchJson('run_events', `run_id=${encodeURIComponent(runId)}&limit=100`).catch(() => []),
-        fetchJson('research_runs', `id=${encodeURIComponent(runId)}`).catch(() => [state.currentRun]),
-      ]);
-      state.currentRun = Array.isArray(freshRun) && freshRun[0] ? freshRun[0] : state.currentRun;
-      state.controls = Array.isArray(controls) ? controls : [];
-      state.candidates = Array.isArray(candidates) ? candidates : [];
-      state.reports = Array.isArray(reports) ? reports : [];
-      state.events = Array.isArray(events) ? events : [];
-      state.activeStep = recommendedStepKey();
-      renderWorkspace();
+      try {
+        const [controls, candidates, reports, events, freshRun] = await Promise.all([
+          fetchJson('run_candidate_controls', `run_id=${encodeURIComponent(runId)}`).catch(() => []),
+          fetchJson('v_run_candidate_summary', `run_id=${encodeURIComponent(runId)}`).catch(() => []),
+          fetchJson('reports', `run_id=${encodeURIComponent(runId)}`).catch(() => []),
+          fetchJson('run_events', `run_id=${encodeURIComponent(runId)}&limit=100`).catch(() => []),
+          fetchJson('research_runs', `id=${encodeURIComponent(runId)}`).catch(() => [state.currentRun]),
+        ]);
+        state.currentRun = Array.isArray(freshRun) && freshRun[0] ? freshRun[0] : state.currentRun;
+        state.controls = Array.isArray(controls) ? controls : [];
+        state.candidates = Array.isArray(candidates) ? candidates : [];
+        state.reports = Array.isArray(reports) ? reports : [];
+        state.events = Array.isArray(events) ? events : [];
+        state.activeStep = recommendedStepKey();
+        renderWorkspace();
+      } finally {
+        state.workspaceRefreshPending = false;
+      }
     }
 
     function renderWorkspace() {
@@ -744,6 +980,8 @@
         $('runErrorBox').classList.add('hidden');
         $('runErrorBox').innerHTML = '';
       }
+      renderRunProgressTimeline();
+      updateProgressPanelVisibility();
       renderStepper();
       renderEvents();
       renderControls();
@@ -773,7 +1011,7 @@
       return !!approvedAt && latestEventTime('candidate_set_changed_after_approval') > approvedAt;
     }
     function candidateUniverseBuilt() {
-      return state.candidates.some(candidate => candidate.fit_score != null || candidate.classification) || hasEvent('candidate_universe_completed');
+      return state.candidates.some(candidate => candidate.classification) || hasEvent('candidate_universe_completed');
     }
     function reportsGenerated() {
       return state.reports.length > 0;
@@ -832,20 +1070,51 @@
     function activeStepHelp(stepKey) {
       if (stepKey === 'setup') return 'Confirm the game and run context before continuing.';
       if (stepKey === 'guidance') return 'Optionally add known games, exclusions, benchmarks, or skip this step.';
-      if (stepKey === 'universe') return 'Build the candidate universe before human review.';
+      if (stepKey === 'universe') return 'Run the candidate universe subprocesses one at a time. Each step unlocks after the previous one completes.';
       if (stepKey === 'review') return 'Sort, filter, inspect details, and choose which comps are included in reports.';
       if (stepKey === 'reports') return reportsGenerated() ? 'Reports are available. View, copy, or download final outputs below.' : 'Generate final reports after comps are confirmed.';
       return '';
+    }
+    function universeStageCard(stepKey, title, description) {
+      const completed = processStageCompleted(stepKey);
+      const canStart = processStageCanStart(stepKey);
+      const inFlight = state.actionInFlight && !completed;
+      const label = completed ? 'Completed' : (canStart ? 'Start' : 'Locked');
+      const disabled = !canStart || state.actionInFlight || completed;
+      return `
+        <div class="step-action-card">
+          <div class="toolbar" style="justify-content:space-between; gap:12px; align-items:flex-start;">
+            <div>
+              <strong>${escapeHtml(title)}</strong>
+              <div class="step-action-requirements">${escapeHtml(description)}</div>
+            </div>
+            <button class="btn ${completed ? 'btn-secondary' : 'btn-primary'}" data-stage-action="${escapeHtml(stepKey)}" ${disabled ? 'disabled' : ''}>${escapeHtml(label)}</button>
+          </div>
+        </div>
+      `;
     }
     function activeStepHtml(stepKey) {
       const universeBuilt = candidateUniverseBuilt();
       const approved = candidateSetApproved();
       const changed = candidateSetChangedAfterApproval();
+      const action = stepActionConfig(stepKey);
+      const actionBar = action ? `
+        <div class="step-action-card">
+          <div class="toolbar" style="justify-content:space-between; gap:12px;">
+            <div>
+              <strong>Single-step action</strong>
+              <div class="step-action-requirements">${escapeHtml(action.message)}</div>
+            </div>
+            <button id="btnRunActiveStep" class="btn btn-primary" ${action.disabled || state.actionInFlight ? 'disabled' : ''}>${escapeHtml(action.label)}</button>
+          </div>
+        </div>
+      ` : '';
       if (stepKey === 'setup') {
-        return `<p><strong>Game:</strong> ${escapeHtml((state.currentGame || {}).title || 'Unknown game')}</p><p><strong>Run:</strong> ${escapeHtml((state.currentRun || {}).name || '(unnamed run)')}</p><p class="status">Use the dashboard to create or open another research run.</p>`;
+        return `${actionBar}<p><strong>Game:</strong> ${escapeHtml((state.currentGame || {}).title || 'Unknown game')}</p><p><strong>Run:</strong> ${escapeHtml((state.currentRun || {}).name || '(unnamed run)')}</p><p class="status">Use the dashboard to create or open another research run.</p>`;
       }
       if (stepKey === 'guidance') {
         return `
+          ${actionBar}
           <p>Known games and guidance are optional, but useful for required comps, exclusions, and benchmarks.</p>
           <div class="toolbar" style="margin-top:10px;"><button id="btnSkipGuidance" class="btn btn-secondary">Skip Guidance</button></div>
           <div class="control-help">
@@ -863,22 +1132,29 @@
             <div><label for="candidateReason">Reason</label><input id="candidateReason" /></div>
             <div class="full-width"><label for="candidateNotes">User Notes</label><textarea id="candidateNotes" rows="3"></textarea></div>
           </div>
-          <div class="toolbar" style="margin-top:12px;"><button id="btnSaveControl" class="btn btn-primary">Save Guidance</button><button id="btnCancelEdit" class="btn btn-secondary">Cancel Edit</button><button id="btnApplyControls" class="btn btn-secondary">Apply Known Games & Guidance</button></div>
+          <div class="toolbar" style="margin-top:12px;"><button id="btnSaveControl" class="btn btn-primary">Save Guidance</button><button id="btnCancelEdit" class="btn btn-secondary">Cancel Edit</button></div>
           <p id="controlStatus" class="status"></p>
           <h3 style="margin-top:16px;">Saved Known Games & Guidance</h3>
           <div class="table-wrap"><table><thead><tr><th>Title</th><th>Steam App ID</th><th>Control Type</th><th>Reason</th><th>User Notes</th><th>Created At</th><th>Actions</th></tr></thead><tbody id="controlsTable"><tr><td colspan="7">No run loaded.</td></tr></tbody></table></div>
         `;
       }
       if (stepKey === 'universe') {
-        return `<p class="help"><strong>Build Candidate Universe</strong> applies guidance, discovers candidates, enriches metadata, and filters/scores/classifies candidates. Reports are generated later after human comp review.</p><button id="btnBuildUniverse" class="btn btn-primary">Build Candidate Universe</button>`;
+        return `
+          <div class="step-action-stack">
+            ${universeStageCard('enrichment', 'Discover and Enrich Candidates', 'Uses the seed game signals and discovery strategy to find nearby Steam candidates and enrich their metadata.')}
+            ${universeStageCard('scoring', 'Filter, Score & Shortlist Candidates', 'Filters out non-fit candidates, scores the rest, and shortlists likely comps for review.')}
+            ${universeStageCard('classification', 'Classify Candidates', 'Assigns the comp bucket for each shortlisted candidate so the review step can begin.')}
+          </div>
+          <p class="status">Run the stages in order. Discovery/guidance must be applied or skipped before the next stage can start.</p>
+        `;
       }
       if (stepKey === 'review') {
         const notice = !universeBuilt ? 'Build the candidate universe before confirming comps for report.' : changed ? 'Candidate selections or exclusions changed after approval. Re-confirm comps before generating reports.' : approved ? 'Candidate set approved. Reports can be generated.' : 'Candidate set is not approved yet. Confirm comps before generating reports.';
-        return `<div class="help">${escapeHtml(notice)}</div><p>Use the Candidate Summary supporting panel below to sort, filter, inspect details, and include/remove comps from reports.</p><button id="btnConfirmComps" class="btn btn-primary" ${!universeBuilt ? 'disabled' : ''}>Confirm Comps for Report</button>`;
+        return `${actionBar}<div class="help">${escapeHtml(notice)}</div><p>Use the Candidate Summary supporting panel below to sort, filter, inspect details, and include/remove comps from reports.</p>`;
       }
       if (stepKey === 'reports') {
-        if (reportsGenerated()) return `<p class="help">Reports already exist for this run.</p><button class="btn btn-primary" id="btnViewReports">View Reports</button>${approved ? '<button id="btnGenerateReports" class="btn btn-secondary">Generate Updated Reports</button>' : '<button id="btnGenerateReports" class="btn btn-secondary" disabled>Generate Reports</button>'}`;
-        return `<p class="help">Generate final reports from the confirmed candidate set.</p><button id="btnGenerateReports" class="btn btn-primary" ${!approved ? 'disabled' : ''}>Generate Reports</button>`;
+        if (reportsGenerated()) return `${actionBar}<p class="help">Reports already exist for this run.</p><button class="btn btn-primary" id="btnViewReports">View Reports</button>`;
+        return `${actionBar}<p class="help">Generate final reports from the confirmed candidate set.</p>`;
       }
       return '';
     }
@@ -1156,6 +1432,9 @@
     async function applyControls() {
       if (!state.currentRun) return;
       $('actionStatus').textContent = 'Applying known games and guidance...';
+      state.actionInFlight = true;
+      updateProgressPanelVisibility();
+      startProgressPolling();
       try {
         const result = await fetchJson('prepare_run_candidates', '', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ run_id: state.currentRun.id }) });
         $('actionStatus').textContent = `Known games and guidance applied: ${result.count ?? 0} candidates (${result.status}).`;
@@ -1163,11 +1442,19 @@
       } catch (error) {
         $('actionStatus').textContent = `Apply failed: ${error.message}`;
       }
+      finally {
+        state.actionInFlight = false;
+        stopProgressPolling();
+        updateProgressPanelVisibility();
+      }
     }
     async function buildCandidateUniverse() {
       if (!state.currentRun) return;
       $('actionStatus').textContent = 'Building candidate universe. This may take a few minutes...';
-      $('btnBuildUniverse').disabled = true;
+      state.actionInFlight = true;
+      updateProgressPanelVisibility();
+      startProgressPolling();
+      setButtonDisabled('btnBuildUniverse', true);
       try {
         const result = await fetchJson('build_candidate_universe', '', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ run_id: state.currentRun.id }) });
         $('actionStatus').textContent = `Candidate universe built. Status: ${result.status}. Review, sort, filter, choose included comps, and confirm before generating reports.`;
@@ -1177,7 +1464,10 @@
         $('actionStatus').textContent = `Build failed: ${error.message}`;
         await refreshWorkspaceData();
       } finally {
-        $('btnBuildUniverse').disabled = false;
+        setButtonDisabled('btnBuildUniverse', false);
+        state.actionInFlight = false;
+        stopProgressPolling();
+        updateProgressPanelVisibility();
       }
     }
     async function confirmCompsForReport() {
@@ -1201,7 +1491,10 @@
         return;
       }
       $('actionStatus').textContent = 'Generating reports from selected candidates...';
-      $('btnGenerateReports').disabled = true;
+      state.actionInFlight = true;
+      updateProgressPanelVisibility();
+      startProgressPolling();
+      setButtonDisabled('btnGenerateReports', true);
       try {
         const result = await fetchJson('generate_reports', '', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ run_id: state.currentRun.id }) });
         $('actionStatus').textContent = `Reports generated. Status: ${result.status}.`;
@@ -1211,7 +1504,10 @@
         $('actionStatus').textContent = `Report generation failed: ${error.message}`;
         await refreshWorkspaceData();
       } finally {
-        $('btnGenerateReports').disabled = false;
+        setButtonDisabled('btnGenerateReports', false);
+        state.actionInFlight = false;
+        stopProgressPolling();
+        updateProgressPanelVisibility();
       }
     }
     async function updateCandidate(candidateId, updates, changeReason) {
@@ -1267,19 +1563,7 @@
     }
     async function runFullPipeline() {
       if (!state.currentRun) return;
-      $('actionStatus').textContent = 'Running full research pipeline. This may take a few minutes...';
-      $('btnRunPipeline').disabled = true;
-      try {
-        const result = await fetchJson('run_research_pipeline', '', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ run_id: state.currentRun.id }) });
-        $('actionStatus').textContent = `Pipeline complete: ${result.status}.`;
-        await refreshWorkspaceData();
-        await refreshDashboard();
-      } catch (error) {
-        $('actionStatus').textContent = `Pipeline failed: ${error.message}`;
-        await refreshWorkspaceData();
-      } finally {
-        $('btnRunPipeline').disabled = false;
-      }
+      $('actionStatus').textContent = 'Use the sequential stage controls to run the pipeline one step at a time.';
     }
 
     $('btnStartNew').addEventListener('click', () => { $('newRunPanel').classList.remove('hidden'); $('newRunPanel').scrollIntoView({ behavior: 'smooth' }); });
@@ -1290,19 +1574,17 @@
     $('btnAdvancedRefreshRuns').addEventListener('click', refreshDashboard);
     $('btnAdvancedLoad').addEventListener('click', () => openRun($('advancedRunId').value.trim()));
     $('btnBackDashboard').addEventListener('click', () => switchMode('dashboard'));
-    $('btnRunPipeline').addEventListener('click', runFullPipeline);
     $('btnShowBackendDetails').addEventListener('click', () => $('runProgressPanel').classList.remove('hidden'));
     $('btnHideBackendDetails').addEventListener('click', () => $('runProgressPanel').classList.add('hidden'));
     $('activeStepPanel').addEventListener('click', event => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+      const stageAction = target.dataset.stageAction;
+      if (stageAction) runProcessStage(stageAction);
+      if (target.id === 'btnRunActiveStep') runActiveStepAction();
       if (target.id === 'btnSaveControl') saveControl();
       if (target.id === 'btnCancelEdit') resetControlForm();
       if (target.id === 'btnSkipGuidance') skipGuidance();
-      if (target.id === 'btnApplyControls') applyControls();
-      if (target.id === 'btnBuildUniverse') buildCandidateUniverse();
-      if (target.id === 'btnConfirmComps') confirmCompsForReport();
-      if (target.id === 'btnGenerateReports') generateReports();
       if (target.id === 'btnViewReports') document.getElementById('reportsList').scrollIntoView({ behavior: 'smooth', block: 'start' });
       const controlId = target.dataset.id;
       if (controlId && target.classList.contains('edit-control')) editControl(controlId);

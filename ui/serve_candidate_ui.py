@@ -4,7 +4,7 @@ import json
 import mimetypes
 import os
 import sys
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from supabase.research_run_service import prepareRunCandidates, updateCandidateControl, deleteCandidateControl
-from supabase.research_pipeline import buildCandidateUniverse, generateReportsForRun, runResearchPipeline
+from supabase.research_pipeline import buildCandidateUniverse, classify_run, enrich_run, generateReportsForRun, runResearchPipeline, score_run
 
 load_dotenv(dotenv_path=Path('.env'))
 
@@ -174,6 +174,76 @@ class CandidateUIHandler(SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps(result).encode('utf-8'))
             except Exception as exc:
                 print(f'Prepare run candidates error: {exc}')
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(exc)}).encode('utf-8'))
+            return
+        if parsed.path == '/api/discover_and_enrich_candidates':
+            length = int(self.headers.get('Content-Length', 0))
+            payload = json.loads(self.rfile.read(length).decode('utf-8'))
+            run_id = payload.get('run_id')
+            if not run_id:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Missing run_id'}).encode('utf-8'))
+                return
+            try:
+                result = enrich_run(run_id)
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(result).encode('utf-8'))
+            except Exception as exc:
+                print(f'Discover and enrich candidates error: {exc}')
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(exc)}).encode('utf-8'))
+            return
+        if parsed.path == '/api/filter_score_shortlist_candidates':
+            length = int(self.headers.get('Content-Length', 0))
+            payload = json.loads(self.rfile.read(length).decode('utf-8'))
+            run_id = payload.get('run_id')
+            if not run_id:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Missing run_id'}).encode('utf-8'))
+                return
+            try:
+                result = score_run(run_id)
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(result).encode('utf-8'))
+            except Exception as exc:
+                print(f'Filter, score, and shortlist candidates error: {exc}')
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(exc)}).encode('utf-8'))
+            return
+        if parsed.path == '/api/classify_candidates':
+            length = int(self.headers.get('Content-Length', 0))
+            payload = json.loads(self.rfile.read(length).decode('utf-8'))
+            run_id = payload.get('run_id')
+            rule_id = payload.get('rule_id') or 'rule_based_v1'
+            if not run_id:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Missing run_id'}).encode('utf-8'))
+                return
+            try:
+                result = classify_run(rule_id, run_id)
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(result).encode('utf-8'))
+            except Exception as exc:
+                print(f'Classify candidates error: {exc}')
                 self.send_response(500)
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
@@ -416,7 +486,7 @@ def main() -> None:
     port = 8000
     ui_dir = Path(__file__).parent
     os.chdir(ui_dir)
-    server = HTTPServer(('127.0.0.1', port), CandidateUIHandler)
+    server = ThreadingHTTPServer(('127.0.0.1', port), CandidateUIHandler)
     print(f'Serving candidate control UI at http://127.0.0.1:{port}/candidate_controls.html')
     server.serve_forever()
 

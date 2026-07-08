@@ -95,6 +95,27 @@ def addRunEvent(run_id: str, stage: str, event_type: str, message: str, details:
     return response[0] if isinstance(response, list) else response
 
 
+def addRunProgressEvent(
+    run_id: str,
+    stage: str,
+    processed_count: int,
+    total_count: int | None = None,
+    *,
+    unit: str = 'games',
+    message: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    payload_details: dict[str, Any] = {
+        'processed_count': processed_count,
+        'unit': unit,
+    }
+    if total_count is not None:
+        payload_details['total_count'] = total_count
+    if details:
+        payload_details.update(details)
+    return addRunEvent(run_id, stage, 'stage_progress', message or f'{stage} progress', payload_details)
+
+
 def updateResearchRunStatus(run_id: str, status: str, current_stage: str | None = None, failure_message: str | None = None) -> dict[str, Any] | None:
     updates: dict[str, Any] = {'status': status}
     if current_stage is not None:
@@ -105,6 +126,28 @@ def updateResearchRunStatus(run_id: str, status: str, current_stage: str | None 
     if isinstance(response, list):
         return response[0] if response else None
     return response
+
+
+def latestRunEventAt(run_id: str, event_type: str) -> str | None:
+    events = client.select('run_events', '*', {'run_id': f'eq.{run_id}', 'event_type': f'eq.{event_type}', 'order': 'created_at.desc', 'limit': '1'})
+    if not events:
+        return None
+    return events[0].get('created_at')
+
+
+def candidateSetWasApproved(run_id: str) -> bool:
+    approved_at = latestRunEventAt(run_id, 'candidate_set_approved')
+    if not approved_at:
+        return False
+    changed_at = latestRunEventAt(run_id, 'candidate_set_changed_after_approval')
+    return not changed_at or changed_at <= approved_at
+
+
+def markCandidateSetChangedAfterApproval(run_id: str, stage: str, message: str, details: dict[str, Any] | None = None) -> bool:
+    if not candidateSetWasApproved(run_id):
+        return False
+    addRunEvent(run_id, stage, 'candidate_set_changed_after_approval', message, details or {})
+    return True
 
 
 def upsertRunCandidateFromControl(control: dict[str, Any]) -> dict[str, Any]:
@@ -188,17 +231,20 @@ def prepareRunCandidates(run_id: str) -> dict[str, Any]:
     if run is None:
         raise ValueError(f'Research run {run_id} not found')
 
+    approved_before_run = candidateSetWasApproved(run_id)
     updateResearchRunStatus(run_id, 'running', current_stage='discovery')
     addRunEvent(run_id, 'discovery', 'script_started', 'prepare_run_candidates started')
 
     controls = listCandidateControls(run_id)
     if not controls:
         addRunEvent(run_id, 'discovery', 'no_controls_found', 'No candidate controls were found for this run.')
+        addRunEvent(run_id, 'discovery', 'stage_completed', 'Known games and guidance applied', {'processed_count': 0, 'unit': 'games'})
         updateResearchRunStatus(run_id, 'completed', current_stage='discovery')
         return {'status': 'no_controls_found', 'count': 0}
 
     candidate_count = 0
-    for control in controls:
+    total_controls = len(controls)
+    for index, control in enumerate(controls, start=1):
         steam_appid = control.get('steam_appid')
         steam_url = control.get('steam_url')
 
@@ -220,7 +266,24 @@ def prepareRunCandidates(run_id: str) -> dict[str, Any]:
 
         upsertRunCandidateFromControl(control)
         candidate_count += 1
+        addRunProgressEvent(
+            run_id,
+            'discovery',
+            candidate_count,
+            total_controls,
+            unit='games',
+            message='Applying known games and guidance',
+            details={'control_id': control.get('id'), 'title': control.get('title')},
+        )
 
     addRunEvent(run_id, 'discovery', 'script_completed', 'prepare_run_candidates completed successfully')
+    addRunEvent(run_id, 'discovery', 'stage_completed', 'Known games and guidance applied', {'processed_count': candidate_count, 'total_count': total_controls, 'unit': 'games'})
+    if approved_before_run and candidate_count > 0:
+        markCandidateSetChangedAfterApproval(
+            run_id,
+            'discovery',
+            'Known games and guidance were updated after candidate approval',
+            {'processed_count': candidate_count, 'total_count': total_controls, 'unit': 'games'},
+        )
     updateResearchRunStatus(run_id, 'completed', current_stage='discovery')
     return {'status': 'completed', 'count': candidate_count}

@@ -11,7 +11,8 @@ import requests
 from openai import OpenAI
 
 from .client import SupabaseClient
-from .research_run_service import addRunEvent, updateResearchRunStatus
+from .research_run_service import addRunEvent, addRunProgressEvent, updateResearchRunStatus
+from .pipeline_logging import log_step, log_step_event
 
 
 client = SupabaseClient()
@@ -167,12 +168,22 @@ def collect_reviews_for_candidate(candidate: dict[str, Any], *, max_pages: int, 
         returning='representation',
     )
     collection_row = collection[0] if isinstance(collection, list) else collection
+    log_step_event('09_fetch_tier1_reviews', 'started', run_id=candidate['run_id'], message='Started review collection for candidate', candidate_id=candidate['id'], appid=appid, max_pages=max_pages, language=language, num_per_page=num_per_page)
+    log_step('09_fetch_tier1_reviews', run_id=candidate['run_id'], message='Started review collection for candidate', candidate_id=candidate['id'], appid=appid, max_pages=max_pages, language=language, num_per_page=num_per_page)
 
     counts = {'positive': 0, 'negative': 0}
     try:
         for review_type in ('positive', 'negative'):
             cursor = '*'
             for _page in range(max_pages):
+                addRunProgressEvent(
+                    candidate['run_id'],
+                    'review_collection',
+                    counts['positive'] + counts['negative'],
+                    unit='reviews',
+                    message='Collecting Tier 1 reviews',
+                    details={'candidate_id': candidate['id'], 'appid': appid, 'review_type': review_type, 'review_count': counts[review_type]},
+                )
                 data = fetch_reviews_page(appid, review_type=review_type, cursor=cursor, language=language, num_per_page=num_per_page)
                 reviews = data.get('reviews') or []
                 if not reviews:
@@ -199,6 +210,8 @@ def collect_reviews_for_candidate(candidate: dict[str, Any], *, max_pages: int, 
             },
             returning='minimal',
         )
+        log_step_event('09_fetch_tier1_reviews', 'completed', run_id=candidate['run_id'], message='Completed review collection for candidate', candidate_id=candidate['id'], appid=appid, positive=counts['positive'], negative=counts['negative'], total=total)
+        log_step('09_fetch_tier1_reviews', run_id=candidate['run_id'], message='Completed review collection for candidate', candidate_id=candidate['id'], appid=appid, positive=counts['positive'], negative=counts['negative'], total=total)
         return {'candidate_id': candidate['id'], **counts, 'total': total, 'status': 'completed'}
     except Exception as exc:
         client.update(
@@ -207,6 +220,8 @@ def collect_reviews_for_candidate(candidate: dict[str, Any], *, max_pages: int, 
             {'collection_status': 'failed', 'failure_message': str(exc), 'completed_at': utc_now_iso()},
             returning='minimal',
         )
+        log_step_event('09_fetch_tier1_reviews', 'completed', run_id=candidate['run_id'], message='Review collection failed for candidate', candidate_id=candidate['id'], appid=appid, error=str(exc))
+        log_step('09_fetch_tier1_reviews', run_id=candidate['run_id'], message='Review collection failed for candidate', candidate_id=candidate['id'], appid=appid, error=str(exc))
         raise
 
 
@@ -303,13 +318,24 @@ def build_candidate_insight(candidate: dict[str, Any]) -> dict[str, Any] | None:
     appid = as_int(candidate.get('steam_appid'))
     if not appid:
         return None
+    log_step_event('10_summarize_tier1_reviews', 'started', run_id=candidate['run_id'], message='Started candidate review summarization', candidate_id=candidate['id'], appid=appid)
     reviews = client.select('steam_reviews', '*', {'steam_appid': f'eq.{appid}', 'order': 'fetched_at.desc', 'limit': '80'})
     positive_rows = sorted([r for r in reviews if r.get('voted_up') is True and r.get('review_text')], key=review_quality_score, reverse=True)
     negative_rows = sorted([r for r in reviews if r.get('voted_up') is False and r.get('review_text')], key=review_quality_score, reverse=True)
     positives = [r.get('review_text') or '' for r in positive_rows]
     negatives = [r.get('review_text') or '' for r in negative_rows]
     if not positives and not negatives:
+        log_step_event('10_summarize_tier1_reviews', 'completed', run_id=candidate['run_id'], message='No reviews found to summarize', candidate_id=candidate['id'], appid=appid)
+        log_step('10_summarize_tier1_reviews', run_id=candidate['run_id'], message='No reviews found to summarize', candidate_id=candidate['id'], appid=appid)
         return None
+    addRunProgressEvent(
+        candidate['run_id'],
+        'review_analysis',
+        0,
+        unit='games',
+        message='Summarizing Tier 1 reviews',
+        details={'candidate_id': candidate['id'], 'appid': appid, 'positive_review_count': len(positives), 'negative_review_count': len(negatives)},
+    )
 
     model = openai_model_name()
     llm_output: dict[str, Any] | None = None
@@ -378,6 +404,16 @@ def build_candidate_insight(candidate: dict[str, Any]) -> dict[str, Any] | None:
         },
     }
     response = client.insert('candidate_review_insights', payload, returning='representation')
+    log_step_event('10_summarize_tier1_reviews', 'completed', run_id=candidate['run_id'], message='Completed candidate review summarization', candidate_id=candidate['id'], appid=appid, positive_review_count=len(positives), negative_review_count=len(negatives), prompt_version=prompt_version, model_version=model_version)
+    log_step('10_summarize_tier1_reviews', run_id=candidate['run_id'], message='Generated candidate review insight', candidate_id=candidate['id'], appid=appid, positive_review_count=len(positives), negative_review_count=len(negatives), prompt_version=prompt_version, model_version=model_version)
+    addRunProgressEvent(
+        candidate['run_id'],
+        'review_analysis',
+        1,
+        unit='games',
+        message='Summarizing Tier 1 reviews',
+        details={'candidate_id': candidate['id'], 'appid': appid, 'positive_review_count': len(positives), 'negative_review_count': len(negatives)},
+    )
     return response[0] if isinstance(response, list) else response
 
 
@@ -424,6 +460,7 @@ def rollup_review_insights(run_id: str) -> dict[str, Any] | None:
     insights = client.select('candidate_review_insights', '*', {'run_id': f'eq.{run_id}', 'order': 'created_at.desc'})
     if not insights:
         return None
+    log_step_event('11_llm_rollup_review_insights', 'started', run_id=run_id, message='Started review rollup generation', insight_count=len(insights))
     model = openai_model_name()
     llm_output: dict[str, Any] | None = None
     prompt_version = 'rule_based_reviews_v1'
@@ -481,6 +518,8 @@ def rollup_review_insights(run_id: str) -> dict[str, Any] | None:
         },
     }
     response = client.insert('run_review_rollups', payload, returning='representation')
+    log_step_event('11_llm_rollup_review_insights', 'completed', run_id=run_id, message='Completed review rollup generation', insight_count=len(insights), prompt_version=prompt_version, model_version=model_version)
+    log_step('11_llm_rollup_review_insights', run_id=run_id, message='Generated review rollup', insight_count=len(insights), prompt_version=prompt_version, model_version=model_version)
     return response[0] if isinstance(response, list) else response
 
 
@@ -522,6 +561,7 @@ def generate_review_report(run_id: str, rollup: dict[str, Any] | None) -> dict[s
     run = one('research_runs', {'id': f'eq.{run_id}'})
     if not run or not rollup:
         return None
+    log_step_event('12_generate_review_insights_report', 'started', run_id=run_id, message='Started review insights report generation')
     insights = client.select('candidate_review_insights', '*', {'run_id': f'eq.{run_id}', 'order': 'created_at.asc'})
     candidates = candidate_lookup(run_id)
     rollup_details = rollup.get('llm_output_json') or {}
@@ -595,7 +635,10 @@ def generate_review_report(run_id: str, rollup: dict[str, Any] | None) -> dict[s
         'template_version': rollup.get('prompt_version') or 'review_report_v1',
     }
     response = client.insert('reports', payload, returning='representation')
-    return response[0] if isinstance(response, list) else response
+    report = response[0] if isinstance(response, list) else response
+    log_step_event('12_generate_review_insights_report', 'completed', run_id=run_id, message='Completed review insights report generation', report_id=report.get('id') if report else None)
+    log_step('12_generate_review_insights_report', run_id=run_id, message='Generated review insights report', report_id=report.get('id') if report else None)
+    return report
 
 
 def runReviewPipeline(run_id: str) -> dict[str, Any]:
@@ -610,6 +653,7 @@ def runReviewPipeline(run_id: str) -> dict[str, Any]:
 
     updateResearchRunStatus(run_id, 'running', current_stage='review_collection')
     addRunEvent(run_id, 'review_collection', 'stage_started', 'Review collection started', {'candidate_limit': candidate_limit, 'max_pages': max_pages})
+    log_step_event('09_fetch_tier1_reviews', 'started', run_id=run_id, message='Started Tier 1 review collection stage', candidate_limit=candidate_limit, max_pages=max_pages)
     selected_candidates = client.select(
         'run_candidates',
         '*',
@@ -619,24 +663,51 @@ def runReviewPipeline(run_id: str) -> dict[str, Any]:
     tier1_candidates = [candidate for candidate in selected_candidates if str(candidate.get('id')) in tier1_ids]
     candidates = (tier1_candidates or selected_candidates)[:candidate_limit]
     collection_results = []
-    for candidate in candidates:
+    for index, candidate in enumerate(candidates, start=1):
         try:
             collection_results.append(collect_reviews_for_candidate(candidate, max_pages=max_pages, language=language, num_per_page=num_per_page))
         except Exception as exc:
             addRunEvent(run_id, 'review_collection', 'candidate_review_collection_failed', f"Failed to collect reviews for {candidate.get('title')}", {'error': str(exc)})
+        addRunProgressEvent(
+            run_id,
+            'review_collection',
+            index,
+            len(candidates),
+            unit='games',
+            message='Collecting Tier 1 reviews',
+            details={'candidate_id': candidate.get('id'), 'title': candidate.get('title')},
+        )
 
-    addRunEvent(run_id, 'review_collection', 'stage_completed', 'Review collection completed', {'collections': collection_results})
+    addRunEvent(run_id, 'review_collection', 'stage_completed', 'Review collection completed', {'collections': collection_results, 'processed_count': len(candidates), 'unit': 'games'})
+    log_step_event('09_fetch_tier1_reviews', 'completed', run_id=run_id, message='Completed Tier 1 review collection stage', collections=len(collection_results))
 
     updateResearchRunStatus(run_id, 'running', current_stage='review_analysis')
     addRunEvent(run_id, 'review_analysis', 'stage_started', 'Review insight analysis started')
+    log_step_event('10_summarize_tier1_reviews', 'started', run_id=run_id, message='Started Tier 1 review summarization stage')
     insight_count = 0
-    for candidate in candidates:
+    for index, candidate in enumerate(candidates, start=1):
         insight = build_candidate_insight(candidate)
         if insight:
             insight_count += 1
+        addRunProgressEvent(
+            run_id,
+            'review_analysis',
+            index,
+            len(candidates),
+            unit='games',
+            message='Summarizing Tier 1 reviews',
+            details={'candidate_id': candidate.get('id'), 'title': candidate.get('title'), 'insight_count': insight_count},
+        )
+
     rollup = rollup_review_insights(run_id)
     report = generate_review_report(run_id, rollup)
-    addRunEvent(run_id, 'review_analysis', 'stage_completed', 'Review insight analysis completed', {'insight_count': insight_count, 'rollup_id': rollup.get('id') if rollup else None, 'report_id': report.get('id') if report else None})
+    addRunEvent(run_id, 'review_analysis', 'stage_completed', 'Review insight analysis completed', {'insight_count': insight_count, 'rollup_id': rollup.get('id') if rollup else None, 'report_id': report.get('id') if report else None, 'processed_count': len(candidates), 'unit': 'games'})
+    log_step_event('10_summarize_tier1_reviews', 'completed', run_id=run_id, message='Completed Tier 1 review summarization stage', insight_count=insight_count)
+    log_step_event('11_llm_rollup_review_insights', 'started', run_id=run_id, message='Started review rollup stage')
+    log_step_event('11_llm_rollup_review_insights', 'completed', run_id=run_id, message='Completed review rollup stage', rollup_id=rollup.get('id') if rollup else None)
+    log_step_event('12_generate_review_insights_report', 'started', run_id=run_id, message='Started review insights report stage')
+    log_step('12_generate_review_insights_report', run_id=run_id, message='Completed review pipeline', insight_count=insight_count, rollup_id=rollup.get('id') if rollup else None, report_id=report.get('id') if report else None)
+    log_step_event('12_generate_review_insights_report', 'completed', run_id=run_id, message='Completed review insights report stage', report_id=report.get('id') if report else None)
     return {
         'collections': collection_results,
         'insight_count': insight_count,

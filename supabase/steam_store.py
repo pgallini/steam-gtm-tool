@@ -4,14 +4,18 @@ import html
 import json
 import re
 import time
+from functools import lru_cache
 from typing import Any
 
 import requests
 from bs4 import BeautifulSoup
 
+from .pipeline_logging import log_step, log_step_event
+
 
 APP_DETAILS_URL = 'https://store.steampowered.com/api/appdetails'
 STORE_APP_URL = 'https://store.steampowered.com/app/{appid}/'
+MAX_STEAM_FETCH_RETRIES = 4
 
 
 def clean_text(value: str | None) -> str:
@@ -35,7 +39,34 @@ def steam_session() -> requests.Session:
     return session
 
 
-def fetch_app_details(appid: int, *, country: str = 'us', language: str = 'english') -> dict[str, Any]:
+def _backoff_seconds(attempt: int) -> float:
+    return min(30.0, 2.0 ** attempt)
+
+
+def _get_with_retry(url: str, *, params: dict[str, Any], run_id: str | None, step_key: str, appid: int) -> requests.Response | None:
+    last_error: Exception | None = None
+    for attempt in range(1, MAX_STEAM_FETCH_RETRIES + 1):
+        try:
+            response = steam_session().get(url, params=params, timeout=45)
+            if response.status_code == 429:
+                wait_seconds = _backoff_seconds(attempt)
+                log_step(step_key, run_id=run_id, message='Steam rate limit hit', appid=appid, attempt=attempt, wait_seconds=wait_seconds, url=url)
+                time.sleep(wait_seconds)
+                continue
+            response.raise_for_status()
+            return response
+        except Exception as exc:
+            last_error = exc
+            wait_seconds = _backoff_seconds(attempt)
+            log_step(step_key, run_id=run_id, message='Steam request retrying after error', appid=appid, attempt=attempt, wait_seconds=wait_seconds, error=str(exc), url=url)
+            time.sleep(wait_seconds)
+    if last_error is not None:
+        log_step(step_key, run_id=run_id, message='Steam request exhausted retries', appid=appid, error=str(last_error), url=url)
+    return None
+
+
+@lru_cache(maxsize=2048)
+def _cached_app_details(appid: int, country: str, language: str) -> dict[str, Any]:
     response = steam_session().get(
         APP_DETAILS_URL,
         params={'appids': str(appid), 'cc': country, 'l': language},
@@ -43,18 +74,63 @@ def fetch_app_details(appid: int, *, country: str = 'us', language: str = 'engli
     )
     response.raise_for_status()
     payload = response.json().get(str(appid), {'success': False})
-    if not isinstance(payload, dict):
-        return {'success': False}
-    return payload
+    return payload if isinstance(payload, dict) else {'success': False}
 
 
-def fetch_store_page(appid: int, *, country: str = 'us', language: str = 'english') -> str:
+@lru_cache(maxsize=2048)
+def _cached_store_page(appid: int, country: str, language: str) -> str:
     response = steam_session().get(
         STORE_APP_URL.format(appid=appid),
         params={'cc': country, 'l': language},
         timeout=45,
     )
     response.raise_for_status()
+    return response.text
+
+
+def fetch_app_details(appid: int, *, country: str = 'us', language: str = 'english', run_id: str | None = None) -> dict[str, Any]:
+    try:
+        log_step_event('03_get_app_details', 'started', run_id=run_id, message='Started Steam app details fetch', appid=appid, country=country, language=language)
+        response = _get_with_retry(
+            APP_DETAILS_URL,
+            params={'appids': str(appid), 'cc': country, 'l': language},
+            run_id=run_id,
+            step_key='03_get_app_details',
+            appid=appid,
+        )
+        if response is None:
+            payload = {'success': False, 'error': 'rate_limited_or_failed'}
+        else:
+            payload = response.json().get(str(appid), {'success': False})
+        if not isinstance(payload, dict):
+            payload = {'success': False}
+        data = payload.get('data') if payload.get('success') else None
+        log_step(
+            '03_get_app_details',
+            run_id=run_id,
+            message='Fetched Steam app details',
+            appid=appid,
+            success=bool(payload.get('success')),
+            name=(data or {}).get('name') if isinstance(data, dict) else None,
+        )
+        log_step_event('03_get_app_details', 'completed', run_id=run_id, message='Completed Steam app details fetch', appid=appid, success=bool(payload.get('success')))
+        return payload
+    except Exception as exc:
+        log_step('03_get_app_details', run_id=run_id, message='Steam app details fetch failed', appid=appid, error=str(exc))
+        log_step_event('03_get_app_details', 'completed', run_id=run_id, message='Steam app details fetch failed', appid=appid, error=str(exc))
+        return {'success': False, 'error': str(exc)}
+
+
+def fetch_store_page(appid: int, *, country: str = 'us', language: str = 'english', run_id: str | None = None) -> str:
+    response = _get_with_retry(
+        STORE_APP_URL.format(appid=appid),
+        params={'cc': country, 'l': language},
+        run_id=run_id,
+        step_key='01_extract_seed_page_signals',
+        appid=appid,
+    )
+    if response is None:
+        raise RuntimeError('Steam store page request failed after retries')
     return response.text
 
 
@@ -159,18 +235,42 @@ def extract_linked_apps(soup: BeautifulSoup, source_appid: int) -> list[dict[str
     return list(apps_by_id.values())
 
 
-def fetch_page_signals(appid: int, *, country: str = 'us', language: str = 'english') -> dict[str, Any]:
-    html_text = fetch_store_page(appid, country=country, language=language)
-    soup = BeautifulSoup(html_text, 'html.parser')
-    rich_tags = extract_rich_tags_from_scripts(html_text)
-    return {
-        'appid': appid,
-        'basic_info': extract_basic_page_info(soup),
-        'tags': rich_tags or extract_tags(soup),
-        'more_like_this_appids': extract_more_like_this_appids(soup),
-        'linked_apps': extract_linked_apps(soup, appid),
-        'fetched_at_unix': int(time.time()),
-    }
+def fetch_page_signals(appid: int, *, country: str = 'us', language: str = 'english', run_id: str | None = None) -> dict[str, Any]:
+    try:
+        log_step_event('01_extract_seed_page_signals', 'started', run_id=run_id, message='Started Steam page signal extraction', appid=appid, country=country, language=language)
+        html_text = fetch_store_page(appid, country=country, language=language, run_id=run_id)
+        soup = BeautifulSoup(html_text, 'html.parser')
+        rich_tags = extract_rich_tags_from_scripts(html_text)
+        tags = rich_tags or extract_tags(soup)
+        more_like_this_appids = extract_more_like_this_appids(soup)
+        linked_apps = extract_linked_apps(soup, appid)
+        signals = {
+            'appid': appid,
+            'basic_info': extract_basic_page_info(soup),
+            'tags': tags,
+            'more_like_this_appids': more_like_this_appids,
+            'linked_apps': linked_apps,
+            'fetched_at_unix': int(time.time()),
+        }
+        log_step(
+            '01_extract_seed_page_signals',
+            run_id=run_id,
+            message='Extracted Steam page signals',
+            appid=appid,
+            tag_names=[tag.get('name') for tag in tags if isinstance(tag, dict) and tag.get('name')],
+            tag_ids=[tag.get('tagid') for tag in tags if isinstance(tag, dict) and tag.get('tagid') is not None],
+            more_like_this_appids=more_like_this_appids,
+            tag_count=len(signals['tags'] or []),
+            more_like_this_count=len(signals['more_like_this_appids'] or []),
+            linked_app_count=len(signals['linked_apps'] or []),
+            page_title=(signals.get('basic_info') or {}).get('page_title'),
+        )
+        log_step_event('01_extract_seed_page_signals', 'completed', run_id=run_id, message='Completed Steam page signal extraction', appid=appid, tag_count=len(tags), more_like_this_count=len(more_like_this_appids), linked_app_count=len(linked_apps))
+        return signals
+    except Exception as exc:
+        log_step('01_extract_seed_page_signals', run_id=run_id, message='Steam page signal extraction failed', appid=appid, error=str(exc))
+        log_step_event('01_extract_seed_page_signals', 'completed', run_id=run_id, message='Steam page signal extraction failed', appid=appid, error=str(exc))
+        return {'appid': appid, 'basic_info': {}, 'tags': [], 'more_like_this_appids': [], 'linked_apps': [], 'fetched_at_unix': int(time.time()), 'error': str(exc)}
 
 
 def normalize_app_details(appid: int, response_for_app: dict[str, Any]) -> dict[str, Any]:
