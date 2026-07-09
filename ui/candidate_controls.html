@@ -212,7 +212,27 @@
     .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
     .filters button.active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
     .report-card { border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-top: 12px; background: var(--card); }
-    .report-viewer { white-space: pre-wrap; max-height: 420px; overflow: auto; background: var(--primary-dark); color: var(--on-primary); padding: 14px; border-radius: 10px; margin-top: 10px; }
+    .report-viewer { max-height: 640px; overflow: auto; background: #FBFCFE; color: var(--text); padding: 18px 20px; border: 1px solid var(--border); border-radius: 12px; margin-top: 10px; }
+    .report-viewer h1, .report-viewer h2, .report-viewer h3, .report-viewer h4 { margin: 1.25em 0 0.45em; line-height: 1.2; color: var(--text); }
+    .report-viewer h1 { font-size: 28px; margin-top: 0; }
+    .report-viewer h2 { font-size: 22px; }
+    .report-viewer h3 { font-size: 18px; }
+    .report-viewer h4 { font-size: 16px; }
+    .report-viewer p, .report-viewer ul, .report-viewer ol, .report-viewer blockquote, .report-viewer pre, .report-viewer table { margin: 0 0 14px; }
+    .report-viewer p:last-child, .report-viewer ul:last-child, .report-viewer ol:last-child, .report-viewer blockquote:last-child, .report-viewer pre:last-child, .report-viewer table:last-child { margin-bottom: 0; }
+    .report-viewer ul, .report-viewer ol { padding-left: 1.4em; }
+    .report-viewer li + li { margin-top: 6px; }
+    .report-viewer a { color: var(--primary); text-decoration: none; }
+    .report-viewer a:hover { text-decoration: underline; }
+    .report-viewer blockquote { border-left: 4px solid var(--primary-border); padding: 10px 14px; background: var(--muted-surface); border-radius: 10px; color: var(--muted); }
+    .report-viewer pre { background: #0E1728; color: #EAF0FF; padding: 14px; border-radius: 10px; overflow: auto; }
+    .report-viewer code { background: rgba(15, 23, 42, 0.08); padding: 0.14em 0.36em; border-radius: 6px; font-size: 0.92em; }
+    .report-viewer pre code { background: transparent; padding: 0; color: inherit; }
+    .report-viewer table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .report-viewer th, .report-viewer td { border: 1px solid var(--border); padding: 8px 10px; vertical-align: top; }
+    .report-viewer th { background: var(--muted-surface); text-align: left; }
+    .report-viewer hr { border: 0; border-top: 1px solid var(--border); margin: 20px 0; }
+    .report-viewer .report-meta { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
     details.advanced { margin-top: 20px; }
     details.advanced summary { cursor: pointer; font-weight: 700; }
     .hidden { display: none !important; }
@@ -449,7 +469,7 @@
 
       <section class="card section">
         <h2>Reports</h2>
-        <p class="status">Reports are the final outputs. Open, copy, or download markdown.</p>
+        <p class="status">Reports are the final outputs. Open a rendered view, copy Markdown, or download Markdown/HTML.</p>
         <div id="reportsList">No reports loaded.</div>
       </section>
 
@@ -501,9 +521,9 @@
       { key: 'enrichment', name: 'Discover and Enrich Candidates', unit: 'games' },
       { key: 'scoring', name: 'Filter, Score & Shortlist Candidates', unit: 'games' },
       { key: 'classification', name: 'Classify Candidates', unit: 'games' },
+      { key: 'report_generation', name: 'Generate Reports', unit: 'candidates' },
       { key: 'review_collection', name: 'Collect Tier 1 Reviews', unit: 'games' },
       { key: 'review_analysis', name: 'Summarize Review Insights', unit: 'games' },
-      { key: 'report_generation', name: 'Generate Reports', unit: 'candidates' },
     ];
     const processStepOrder = processSteps.map(step => step.key);
     let progressPollTimer = null;
@@ -525,6 +545,194 @@
     }
     function escapeHtml(value) {
       return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, '&#096;');
+    }
+    function slugifyHeading(value) {
+      return String(value || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'section';
+    }
+    function applyInlineMarkdown(text) {
+      const placeholders = [];
+      let output = String(text || '');
+      output = output.replace(/`([^`]+)`/g, (_, code) => {
+        const token = `__CODE_${placeholders.length}__`;
+        placeholders.push(`<code>${escapeHtml(code)}</code>`);
+        return token;
+      });
+      output = escapeHtml(output);
+      output = output.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer noopener">$1</a>');
+      output = output.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      output = output.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+      output = output.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+      output = output.replace(/_([^_]+)_/g, '<em>$1</em>');
+      output = output.replace(/\^\^([^^]+)\^\^/g, '<sup>$1</sup>');
+      output = output.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+      placeholders.forEach((snippet, index) => {
+        output = output.replace(`__CODE_${index}__`, snippet);
+      });
+      return output;
+    }
+    function renderMarkdownTable(rows) {
+      if (rows.length < 2) return '';
+      const headerCells = rows[0].slice(1, -1).split('|').map(cell => cell.trim());
+      const bodyRows = rows.slice(2).filter(row => row.includes('|')).map(row => row.slice(1, -1).split('|').map(cell => cell.trim()));
+      const headerHtml = headerCells.map(cell => `<th>${applyInlineMarkdown(cell)}</th>`).join('');
+      const bodyHtml = bodyRows.map(cells => `<tr>${cells.map(cell => `<td>${applyInlineMarkdown(cell)}</td>`).join('')}</tr>`).join('');
+      return `<table><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
+    }
+    function renderMarkdownContent(markdown) {
+      const lines = String(markdown || '').replace(/\r\n/g, '\n').split('\n');
+      const htmlParts = [];
+      const paragraphLines = [];
+      const listStack = [];
+      let inCodeBlock = false;
+      let codeBuffer = [];
+      let tableBuffer = [];
+
+      function flushParagraph() {
+        if (!paragraphLines.length) return;
+        htmlParts.push(`<p>${applyInlineMarkdown(paragraphLines.join(' ').trim())}</p>`);
+        paragraphLines.length = 0;
+      }
+      function closeLists(targetDepth = 0) {
+        while (listStack.length > targetDepth) {
+          htmlParts.push(`</${listStack.pop()}>`);
+        }
+      }
+      function flushTable() {
+        if (tableBuffer.length >= 2 && tableBuffer[1].includes('|')) {
+          htmlParts.push(renderMarkdownTable(tableBuffer));
+        } else if (tableBuffer.length) {
+          htmlParts.push(tableBuffer.map(line => `<p>${applyInlineMarkdown(line)}</p>`).join(''));
+        }
+        tableBuffer = [];
+      }
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (inCodeBlock) {
+          if (trimmed.startsWith('```')) {
+            htmlParts.push(`<pre><code>${escapeHtml(codeBuffer.join('\n'))}</code></pre>`);
+            codeBuffer = [];
+            inCodeBlock = false;
+          } else {
+            codeBuffer.push(line);
+          }
+          continue;
+        }
+        if (trimmed.startsWith('```')) {
+          flushParagraph();
+          flushTable();
+          closeLists();
+          inCodeBlock = true;
+          continue;
+        }
+        if (!trimmed) {
+          flushParagraph();
+          flushTable();
+          closeLists();
+          continue;
+        }
+        const headingMatch = trimmed.match(/^(#{1,6})\s+(.*)$/);
+        if (headingMatch) {
+          flushParagraph();
+          flushTable();
+          closeLists();
+          const level = headingMatch[1].length;
+          const headingText = headingMatch[2].trim();
+          htmlParts.push(`<h${level} id="${escapeAttr(slugifyHeading(headingText))}">${applyInlineMarkdown(headingText)}</h${level}>`);
+          continue;
+        }
+        if (/^[-*_]{3,}$/.test(trimmed)) {
+          flushParagraph();
+          flushTable();
+          closeLists();
+          htmlParts.push('<hr />');
+          continue;
+        }
+        if (line.includes('|') && !trimmed.startsWith('|---')) {
+          flushParagraph();
+          closeLists();
+          tableBuffer.push(line);
+          continue;
+        }
+        if (tableBuffer.length) {
+          flushTable();
+        }
+        const unorderedMatch = line.match(/^(\s*)([-*+])\s+(.*)$/);
+        const orderedMatch = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
+        if (unorderedMatch || orderedMatch) {
+          flushParagraph();
+          const indent = Math.floor((unorderedMatch || orderedMatch)[1].length / 2);
+          const listTag = unorderedMatch ? 'ul' : 'ol';
+          const itemText = (unorderedMatch || orderedMatch)[3].trim();
+          while (listStack.length > indent + 1) {
+            htmlParts.push(`</${listStack.pop()}>`);
+          }
+          if (listStack.length < indent + 1) {
+            listStack.push(listTag);
+            htmlParts.push(`<${listTag}>`);
+          } else if (listStack[listStack.length - 1] !== listTag) {
+            htmlParts.push(`</${listStack.pop()}>`);
+            listStack.push(listTag);
+            htmlParts.push(`<${listTag}>`);
+          }
+          htmlParts.push(`<li>${applyInlineMarkdown(itemText)}</li>`);
+          continue;
+        }
+        closeLists();
+        paragraphLines.push(line);
+      }
+
+      if (inCodeBlock) htmlParts.push(`<pre><code>${escapeHtml(codeBuffer.join('\n'))}</code></pre>`);
+      flushParagraph();
+      flushTable();
+      closeLists();
+      return htmlParts.join('');
+    }
+    function reportDownloadName(report, extension) {
+      return `${String((report.report_type || 'report').replace(/[^a-z0-9_-]/gi, '_'))}_${report.id}.${extension}`;
+    }
+    function reportHtmlDocument(report) {
+      const title = escapeHtml(report.title || report.report_type || 'Report');
+      const body = renderMarkdownContent(report.content_md || '');
+      return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${title}</title>
+  <style>
+    :root { color-scheme: light; }
+    body { margin: 0; padding: 32px 20px 48px; background: #F4F7FB; color: #1F2937; font: 16px/1.6 Georgia, 'Times New Roman', serif; }
+    main { max-width: 980px; margin: 0 auto; background: #fff; border: 1px solid #D7DDE8; border-radius: 18px; padding: 28px 30px 34px; box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06); }
+    h1, h2, h3, h4 { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.2; color: #111827; }
+    h1 { font-size: 2rem; margin: 0 0 0.35em; }
+    .meta { margin: 0 0 24px; color: #6B7280; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    p, ul, ol, blockquote, pre, table { margin: 0 0 16px; }
+    ul, ol { padding-left: 1.4em; }
+    blockquote { border-left: 4px solid #CBD5E1; padding: 12px 16px; background: #F8FAFC; border-radius: 12px; }
+    pre { background: #0F172A; color: #E2E8F0; padding: 14px 16px; border-radius: 12px; overflow: auto; }
+    code { background: rgba(15, 23, 42, 0.08); padding: 0.14em 0.36em; border-radius: 6px; font-size: 0.92em; }
+    pre code { background: transparent; padding: 0; color: inherit; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    th, td { border: 1px solid #CBD5E1; padding: 8px 10px; vertical-align: top; }
+    th { background: #F8FAFC; text-align: left; }
+    hr { border: 0; border-top: 1px solid #D7DDE8; margin: 22px 0; }
+    a { color: #1D4ED8; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    @media print { body { background: #fff; padding: 0; } main { box-shadow: none; border: 0; border-radius: 0; padding: 0; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>${title}</h1>
+    <p class="meta">${escapeHtml(report.report_type || 'report')} · Generated ${escapeHtml(formatDate(report.created_at))} · ${escapeHtml(report.template_version || '')}</p>
+    ${body}
+  </main>
+</body>
+</html>`;
     }
     function formatPillValue(value) {
       const text = String(value || 'unknown').replaceAll('_', ' ').trim();
@@ -657,6 +865,11 @@
       if (failedEvent) {
         return { status: 'failed', icon: '✕', text: failedEvent.failure_message || failedEvent.message || 'Failed' };
       }
+      if (completedEvent) {
+        const count = processStepCount(step.key, completedEvent);
+        const unit = processStepUnit(step.key, completedEvent);
+        return { status: 'completed', icon: '✓', text: count != null ? `${count} ${unit} processed` : 'Completed' };
+      }
       const isActiveStage = state.currentRun?.status === 'running' && state.currentRun?.current_stage === step.key;
       if (isActiveStage || progressEvent) {
         const event = progressEvent || latestRunEvent(step.key, ['stage_started']);
@@ -668,7 +881,7 @@
           : 'Processing...';
         return { status: 'running', icon: '●', text };
       }
-      if (state.currentRun?.status === 'completed' || (state.currentRun?.status === 'running' && stepIndex < activeStageIndex) || completedEvent) {
+      if (state.currentRun?.status === 'completed' || (state.currentRun?.status === 'running' && stepIndex < activeStageIndex)) {
         const event = completedEvent || progressEvent;
         const count = processStepCount(step.key, event);
         const unit = processStepUnit(step.key, event);
@@ -999,7 +1212,7 @@
       return event ? new Date(event.created_at).getTime() : 0;
     }
     function guidanceSkipped() {
-      return hasEvent('known_games_guidance_skipped') || (candidateUniverseBuilt() && state.controls.length === 0);
+      return hasEvent('known_games_guidance_skipped');
     }
     function candidateSetApproved() {
       const approvedAt = latestEventTime('candidate_set_approved');
@@ -1012,6 +1225,12 @@
     }
     function candidateUniverseBuilt() {
       return state.candidates.some(candidate => candidate.classification) || hasEvent('candidate_universe_completed');
+    }
+    function candidateUniverseReady() {
+      return processStageCompleted('scoring') || processStageCompleted('classification') || candidateUniverseBuilt();
+    }
+    function reportingStageActive() {
+      return ['report_generation', 'review_collection', 'review_analysis'].includes(state.currentRun?.current_stage || '') && state.currentRun?.status === 'running';
     }
     function reportsGenerated() {
       return state.reports.length > 0;
@@ -1034,8 +1253,14 @@
     function recommendedStepKey() {
       if (!state.currentRun || !state.currentGame) return 'setup';
       if (reportsGenerated()) return 'reports';
-      if (state.controls.length === 0 && !guidanceSkipped() && !candidateUniverseBuilt()) return 'guidance';
-      if (!candidateUniverseBuilt()) return 'universe';
+      if (processStageCompleted('classification') || state.currentRun?.current_stage === 'classification' || state.currentRun?.status === 'completed') {
+        return candidateSetApproved() ? 'reports' : 'review';
+      }
+      if (!guidanceSkipped() && state.controls.length === 0 && !processStageCompleted('discovery')) return 'guidance';
+      if (processStageCompleted('scoring') && !processStageCompleted('classification')) return 'universe';
+      if (processStageCompleted('enrichment') && !processStageCompleted('scoring')) return 'universe';
+      if (processStageCompleted('discovery') && !processStageCompleted('enrichment')) return 'universe';
+      if (!candidateUniverseReady()) return 'universe';
       if (!candidateSetApproved()) return 'review';
       return 'reports';
     }
@@ -1077,10 +1302,10 @@
     }
     function universeStageCard(stepKey, title, description) {
       const completed = processStageCompleted(stepKey);
+      const running = state.currentRun?.status === 'running' && state.currentRun?.current_stage === stepKey;
       const canStart = processStageCanStart(stepKey);
-      const inFlight = state.actionInFlight && !completed;
-      const label = completed ? 'Completed' : (canStart ? 'Start' : 'Locked');
-      const disabled = !canStart || state.actionInFlight || completed;
+      const label = completed ? 'Completed' : running ? 'Running' : (canStart ? 'Start' : 'Locked');
+      const disabled = running || !canStart || state.actionInFlight || completed;
       return `
         <div class="step-action-card">
           <div class="toolbar" style="justify-content:space-between; gap:12px; align-items:flex-start;">
@@ -1088,7 +1313,7 @@
               <strong>${escapeHtml(title)}</strong>
               <div class="step-action-requirements">${escapeHtml(description)}</div>
             </div>
-            <button class="btn ${completed ? 'btn-secondary' : 'btn-primary'}" data-stage-action="${escapeHtml(stepKey)}" ${disabled ? 'disabled' : ''}>${escapeHtml(label)}</button>
+            <button class="btn ${completed || running ? 'btn-secondary' : 'btn-primary'}" data-stage-action="${escapeHtml(stepKey)}" ${disabled ? 'disabled' : ''}>${escapeHtml(label)}</button>
           </div>
         </div>
       `;
@@ -1153,7 +1378,10 @@
         return `${actionBar}<div class="help">${escapeHtml(notice)}</div><p>Use the Candidate Summary supporting panel below to sort, filter, inspect details, and include/remove comps from reports.</p>`;
       }
       if (stepKey === 'reports') {
-        if (reportsGenerated()) return `${actionBar}<p class="help">Reports already exist for this run.</p><button class="btn btn-primary" id="btnViewReports">View Reports</button>`;
+        if (reportingStageActive()) {
+          return `${actionBar}<p class="help">Report generation is in progress. Review collection and review analysis are still running.</p>${reportsGenerated() ? '<button class="btn btn-primary" id="btnViewReports">View Reports</button>' : ''}`;
+        }
+        if (reportsGenerated()) return `${actionBar}<p class="help">Reports are available for this run.</p><button class="btn btn-primary" id="btnViewReports">View Reports</button>`;
         return `${actionBar}<p class="help">Generate final reports from the confirmed candidate set.</p>`;
       }
       return '';
@@ -1339,9 +1567,10 @@
               <button class="btn btn-secondary toggle-report" data-id="${escapeHtml(report.id)}">Open</button>
               <button class="btn btn-secondary copy-report" data-id="${escapeHtml(report.id)}">Copy Markdown</button>
               <button class="btn btn-secondary download-report" data-id="${escapeHtml(report.id)}">Download Markdown</button>
+              <button class="btn btn-secondary download-report-html" data-id="${escapeHtml(report.id)}">Download HTML</button>
             </div>
           </div>
-          <pre id="report-${escapeHtml(report.id)}" class="report-viewer hidden">${escapeHtml(report.content_md || '')}</pre>
+          <article id="report-${escapeHtml(report.id)}" class="report-viewer hidden">${renderMarkdownContent(report.content_md || '')}</article>
         </div>
       `).join('');
     }
@@ -1675,7 +1904,16 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${(report.report_type || 'report').replace(/[^a-z0-9_-]/gi, '_')}_${report.id}.md`;
+        a.download = reportDownloadName(report, 'md');
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+      if (target.classList.contains('download-report-html')) {
+        const blob = new Blob([reportHtmlDocument(report)], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = reportDownloadName(report, 'html');
         a.click();
         URL.revokeObjectURL(url);
       }
