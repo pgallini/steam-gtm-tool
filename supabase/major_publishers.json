@@ -1,0 +1,128 @@
+[
+  {
+    "canonical_name": "Electronic Arts",
+    "aliases": ["ea", "electronic arts", "ea games", "ea sports"],
+    "parent_company": "Electronic Arts",
+    "confidence": "high"
+  },
+  {
+    "canonical_name": "Ubisoft",
+    "aliases": ["ubisoft", "ubisoft entertainment"],
+    "parent_company": "Ubisoft",
+    "confidence": "high"
+  },
+  {
+    "canonical_name": "Activision",
+    "aliases": ["activision", "activision publishing"],
+    "parent_company": "Activision Blizzard",
+    "confidence": "high"
+  },
+  {
+    "canonical_name": "Blizzard",
+    "aliases": ["blizzard", "blizzard entertainment"],
+    "parent_company": "Activision Blizzard",
+    "confidence": "high"
+  },
+  {
+    "canonical_name": "Xbox Game Studios",
+    "aliases": ["xbox game studios", "microsoft studios", "bethesda softworks", "zenimax", "zenimax media", "microsoft", "xbox publishing"],
+    "parent_company": "Microsoft",
+    "confidence": "high"
+  },
+  {
+    "canonical_name": "Sony / PlayStation PC",
+    "aliases": ["sony", "playstation pc", "sony interactive entertainment", "playstation publishing", "sony computer entertainment"],
+    "parent_company": "Sony",
+    "confidence": "high"
+  },
+  {
+    "canonical_name": "Square Enix",
+    "aliases": ["square enix", "square enix holdings"],
+    "parent_company": "Square Enix",
+    "confidence": "high"
+  },
+  {
+    "canonical_name": "Capcom",
+    "aliases": ["capcom", "capcom co", "capcom u s a"],
+    "parent_company": "Capcom",
+    "confidence": "high"
+  },
+  {
+    "canonical_name": "Bandai Namco",
+    "aliases": ["bandai namco", "bandai namco entertainment"],
+    "parent_company": "Bandai Namco",
+    "confidence": "high"
+  },
+  {
+    "canonical_name": "Sega",
+    "aliases": ["sega", "sega europe", "sega of america"],
+    "parent_company": "Sega",
+    "confidence": "high"
+  },
+  {
+    "canonical_name": "Take-Two Interactive",
+    "aliases": ["take two", "take-two", "take two interactive", "2k", "rockstar games", "private division"],
+    "parent_company": "Take-Two Interactive",
+    "confidence": "high"
+  },
+  {
+    "canonical_name": "Warner Bros. Games",
+    "aliases": ["warner bros", "warner bros games", "wb games"],
+    "parent_company": "Warner Bros. Discovery",
+    "confidence": "high"
+  },
+  {
+    "canonical_name": "Nintendo",
+    "aliases": ["nintendo", "nintendo co", "nintendo of america"],
+    "parent_company": "Nintendo",
+    "confidence": "high"
+  },
+  {
+    "canonical_name": "Konami",
+    "aliases": ["konami", "konami digital entertainment"],
+    "parent_company": "Konami",
+    "confidence": "high"
+  },
+  {
+    "canonical_name": "THQ Nordic / Embracer",
+    "aliases": ["thq nordic", "embracer", "embracer group"],
+    "parent_company": "Embracer Group",
+    "confidence": "high"
+  },
+  {
+    "canonical_name": "Paradox Interactive",
+    "aliases": ["paradox", "paradox interactive"],
+    "parent_company": "Paradox Interactive",
+    "confidence": "medium"
+  },
+  {
+    "canonical_name": "Focus Entertainment",
+    "aliases": ["focus entertainment", "focus home interactive"],
+    "parent_company": "Focus Entertainment",
+    "confidence": "medium"
+  },
+  {
+    "canonical_name": "Annapurna Interactive",
+    "aliases": ["annapurna", "annapurna interactive"],
+    "parent_company": "Annapurna Interactive",
+    "confidence": "medium"
+  },
+  {
+    "canonical_name": "Devolver Digital",
+    "aliases": ["devolver", "devolver digital"],
+    "parent_company": "Devolver Digital",
+    "confidence": "medium"
+  },
+  {
+    "canonical_name": "Team17",
+    "aliases": ["team17", "team 17"],
+    "parent_company": "Team17",
+    "confidence": "medium"
+  },
+  {
+    "canonical_name": "505 Games",
+    "aliases": ["505 games", "505"],
+    "parent_company": "505 Games",
+    "confidence": "medium"
+  }
+]

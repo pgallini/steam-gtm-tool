@@ -137,13 +137,20 @@
     .include-toggle:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(90, 58, 136, 0.20); }
     .table-col-details { width: 56px; min-width: 56px; }
     .table-col-included { width: 150px; min-width: 150px; }
-    .table-col-source { width: 180px; min-width: 180px; }
-    .table-col-status { width: 142px; min-width: 142px; }
-    .table-col-classification { width: 152px; min-width: 152px; }
+    .table-col-developer { width: 160px; min-width: 160px; }
+    .table-col-publisher { width: 170px; min-width: 170px; }
+    .table-col-source { width: 168px; min-width: 168px; }
+    .table-col-status { width: 132px; min-width: 132px; }
+    .table-col-comp-lane { width: 148px; min-width: 148px; }
+    .table-col-aaa { width: 94px; min-width: 94px; }
+    .table-col-classic { width: 94px; min-width: 94px; }
+    .table-col-classification { width: 162px; min-width: 162px; }
     .table-col-run-status { width: 142px; min-width: 142px; }
     .candidate-col-source .badge { width: 160px; justify-content: center; }
     .candidate-col-status .badge { width: 122px; justify-content: center; }
-    .candidate-col-classification .badge { width: 132px; justify-content: center; }
+    .candidate-col-classification .badge { width: 150px; justify-content: center; }
+    .candidate-col-comp-lane .badge { width: 132px; justify-content: center; }
+    .candidate-col-aaa .badge, .candidate-col-classic .badge { width: 64px; justify-content: center; }
     .recent-run-status .badge { width: 122px; justify-content: center; }
     .candidate-title { font-size: 14px; font-weight: 750; color: var(--text); }
     .title-cell-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -163,6 +170,18 @@
     .candidate-detail-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
     .candidate-detail-grid { display: grid; gap: 8px; }
     .detail-label { font-weight: 800; }
+    .bulk-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--muted-surface);
+    }
+    .bulk-actions strong { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
     .stepper { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
     .step { border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; background: var(--card); }
     .step strong { display: block; font-size: 13px; }
@@ -317,7 +336,7 @@
             <textarea id="newConceptNotes" rows="3" placeholder="Optional notes about the concept, audience, positioning, or questions to answer."></textarea>
           </div>
           <div class="full-width">
-            <label for="anchorTagsInput">Anchor Tags</label>
+            <label for="anchorTagsInput">Tags</label>
             <input id="anchorTagsInput" placeholder="Creature Collector, Dungeon Crawler, Turn-Based, RPG" />
           </div>
         </div>
@@ -426,15 +445,19 @@
         <h2>Candidate Summary</h2>
         <p class="status">Supporting workspace for reviewing, sorting, filtering, and choosing which comps are included in reports.</p>
         <div class="toolbar" style="margin-top:12px;">
-          <label style="margin-top:0;">Search <input id="candidateSearch" placeholder="Search title, source, classification, reasoning..." /></label>
+          <label style="margin-top:0;">Search <input id="candidateSearch" placeholder="Search title, developer, publisher, reason..." /></label>
           <label style="margin-top:0;">Sort
             <select id="candidateSort">
               <option value="final_rank">Final Rank</option>
-              <option value="fit_score">Fit Score</option>
-              <option value="review_count">Review Count</option>
-              <option value="confidence">Confidence</option>
               <option value="title">Title</option>
+              <option value="review_count">Reviews</option>
+              <option value="fit_score">Fit</option>
+              <option value="comp_lane">Comp Lane</option>
               <option value="classification">Classification</option>
+              <option value="confidence">Confidence</option>
+              <option value="publisher">Publisher</option>
+              <option value="developer">Developer</option>
+              <option value="included">Included in Report</option>
             </select>
           </label>
           <label style="margin-top:0;">Direction
@@ -444,25 +467,46 @@
             </select>
           </label>
         </div>
+        <div class="bulk-actions">
+          <strong>Bulk Actions:</strong>
+          <button id="btnBulkExcludeAaa" class="btn btn-secondary">Exclude AAA</button>
+          <button id="btnBulkExcludeClassics" class="btn btn-secondary">Exclude Classics</button>
+          <button id="btnBulkExcludeLowSignal" class="btn btn-secondary">Exclude Low Signal</button>
+          <button id="btnBulkIncludeIndie" class="btn btn-secondary">Include Indie Relevant</button>
+        </div>
         <div class="filters" id="candidateFilters">
           <button data-filter="all" class="active">All</button>
           <button data-filter="included">Included in Report</button>
           <button data-filter="not_included">Not Included</button>
-          <button data-filter="known">Known Games</button>
-          <button data-filter="discovered">Discovered</button>
-          <button data-filter="direct">Direct Comps</button>
-          <button data-filter="audience">Audience Comps</button>
-          <button data-filter="benchmarks">Benchmarks</button>
-          <button data-filter="low_fit">Low Fit</button>
+          <button data-filter="indie_relevant">Indie Relevant</button>
+          <button data-filter="aaa_or_major_publisher">AAA / Major Publisher</button>
+          <button data-filter="industry_classic">Industry Classic</button>
+          <button data-filter="uncertain">Uncertain</button>
+          <button data-filter="low_signal">Low Signal</button>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th class="table-col-details" aria-label="Details"></th><th class="table-col-included" title="Only included comps are used when reports are generated.">Included in Report?</th><th>Rank</th><th>Title</th><th class="table-col-source">Source</th><th class="table-col-status">Status</th><th>Reviews</th><th>Fit</th><th class="table-col-classification">Classification</th><th>Confidence</th><th>Reasoning / Notes</th>
+                <th class="table-col-details" aria-label="Details"></th>
+                <th class="table-col-included" title="Only included comps are used when reports are generated.">Included?</th>
+                <th>Rank</th>
+                <th>Title</th>
+                <th class="table-col-developer">Developer</th>
+                <th class="table-col-publisher">Publisher</th>
+                <th>Reviews</th>
+                <th>Fit</th>
+                <th class="table-col-comp-lane">Comp Lane</th>
+                <th class="table-col-classification">Classification</th>
+                <th>Confidence</th>
+                <th class="table-col-aaa">AAA</th>
+                <th class="table-col-classic">Classic</th>
+                <th>Reason</th>
+                <th class="table-col-source">Source</th>
+                <th class="table-col-status">Status</th>
               </tr>
             </thead>
-            <tbody id="summaryTable"><tr><td colspan="11">No run loaded.</td></tr></tbody>
+            <tbody id="summaryTable"><tr><td colspan="16">No run loaded.</td></tr></tbody>
           </table>
         </div>
       </section>
@@ -766,6 +810,65 @@
       if (status === 'failed' || status === 'error') return badge(status, 'badge-red');
       return badge(status || 'unknown', 'badge-gray');
     }
+    function candidateIncluded(item) {
+      return !!(item.include_in_report ?? item.is_selected_for_report);
+    }
+    function effectiveCompClassification(item) {
+      return item.classification_override || item.comp_exclusion_category || 'uncertain';
+    }
+    function classificationConfidenceValue(item) {
+      const category = effectiveCompClassification(item);
+      if (category === 'aaa_or_major_publisher') return item.aaa_confidence || null;
+      if (category === 'industry_classic') return item.classic_confidence || null;
+      if (category === 'low_signal') return 'low';
+      if (category === 'indie_relevant') return 'high';
+      return null;
+    }
+    function confidenceLabel(value) {
+      const normalized = String(value || '').toLowerCase();
+      if (normalized === 'high') return 'High';
+      if (normalized === 'medium') return 'Medium';
+      if (normalized === 'low') return 'Low';
+      return '—';
+    }
+    function compClassificationLabel(category) {
+      if (category === 'indie_relevant') return 'Indie Relevant';
+      if (category === 'aaa_or_major_publisher') return 'AAA / Major Publisher';
+      if (category === 'industry_classic') return 'Industry Classic';
+      if (category === 'low_signal') return 'Low Signal';
+      if (category === 'uncertain') return 'Uncertain';
+      return formatPillValue(category);
+    }
+    function exclusionBadge(category) {
+      if (category === 'indie_relevant') return badge('Indie Relevant', 'badge-green');
+      if (category === 'aaa_or_major_publisher') return badge('AAA / Major Publisher', 'badge-red');
+      if (category === 'industry_classic') return badge('Industry Classic', 'badge-amber');
+      if (category === 'low_signal') return badge('Low Signal', 'badge-gray');
+      if (category === 'uncertain') return badge('Uncertain', 'badge-blue');
+      return badge(category || 'unknown', 'badge-gray');
+    }
+    function classificationConfidenceLabel(item) {
+      return confidenceLabel(classificationConfidenceValue(item));
+    }
+    function classificationReason(item) {
+      if (item.classification_override) {
+        const overrideLabel = compClassificationLabel(item.classification_override);
+        return `Manual override: ${overrideLabel}${item.classification_notes ? ` · Notes: ${item.classification_notes}` : ''}`;
+      }
+      const notes = item.classification_notes ? ` · Notes: ${item.classification_notes}` : '';
+      if (effectiveCompClassification(item) === 'aaa_or_major_publisher') return `${item.aaa_reason || 'Publisher matched known major publisher list.'}${notes}`;
+      if (effectiveCompClassification(item) === 'industry_classic') return `${item.classic_reason || 'Matched industry classics list.'}${notes}`;
+      if (effectiveCompClassification(item) === 'low_signal') return `Insufficient Steam signal for reliable market comparison.${notes}`;
+      if (effectiveCompClassification(item) === 'uncertain') return `Classification needs human review.${notes}`;
+      return `No major publisher, industry classic, or low-signal exclusion detected.${notes}`;
+    }
+    function classificationColumnConfidence(item) {
+      const confidence = classificationConfidenceLabel(item);
+      if (confidence === 'High') return badge(confidence, 'badge-green');
+      if (confidence === 'Medium') return badge(confidence, 'badge-amber');
+      if (confidence === 'Low') return badge(confidence, 'badge-red');
+      return badge('—', 'badge-gray');
+    }
     function latestRunEvent(stage, eventTypes = null) {
       const events = state.events
         .filter(event => event.stage === stage && (!eventTypes || eventTypes.includes(event.event_type)))
@@ -815,6 +918,7 @@
         state.actionInFlight = false;
         stopProgressPolling();
         updateProgressPanelVisibility();
+        await refreshWorkspaceData().catch(() => {});
       }
     }
     function detailsCount(details, keys = []) {
@@ -1167,7 +1271,7 @@
       loadedRunStatusPill.className = `pill ${run.status === 'completed' ? 'completed' : run.status === 'running' || run.status === 'queued' ? 'running' : run.status === 'failed' ? 'failed' : ''}`;
       loadedRunStatusPill.textContent = formatPillValue(run.status);
       const org = state.organizations.find(item => item.id === run.organization_id) || {};
-      const includedCount = state.candidates.filter(item => item.is_selected_for_report).length;
+      const includedCount = state.candidates.filter(candidateIncluded).length;
       const directCount = state.candidates.filter(item => item.classification === 'direct_comp').length;
       $('loadedRunDetails').innerHTML = `
         <div class="loaded-run-meta">
@@ -1256,10 +1360,10 @@
       if (processStageCompleted('classification') || state.currentRun?.current_stage === 'classification' || state.currentRun?.status === 'completed') {
         return candidateSetApproved() ? 'reports' : 'review';
       }
-      if (!guidanceSkipped() && state.controls.length === 0 && !processStageCompleted('discovery')) return 'guidance';
       if (processStageCompleted('scoring') && !processStageCompleted('classification')) return 'universe';
       if (processStageCompleted('enrichment') && !processStageCompleted('scoring')) return 'universe';
       if (processStageCompleted('discovery') && !processStageCompleted('enrichment')) return 'universe';
+      if (!guidanceSkipped() && state.controls.length === 0 && !candidateUniverseBuilt()) return 'guidance';
       if (!candidateUniverseReady()) return 'universe';
       if (!candidateSetApproved()) return 'review';
       return 'reports';
@@ -1412,26 +1516,37 @@
       `).join('');
     }
     function candidateMatchesFilter(item) {
+      const category = effectiveCompClassification(item);
+      const baseCategory = item.comp_exclusion_category || 'uncertain';
       switch (state.candidateFilter) {
-        case 'included': return item.is_selected_for_report;
-        case 'not_included': return !item.is_selected_for_report;
-        case 'known': return ['user_supplied', 'client_supplied'].includes(item.primary_source) || !!item.user_control_type;
-        case 'benchmarks': return item.is_benchmark_only;
-        case 'discovered': return !['user_supplied', 'client_supplied'].includes(item.primary_source);
-        case 'direct': return item.classification === 'direct_comp';
-        case 'audience': return item.classification === 'audience_comp';
-        case 'low_fit': return ['low_fit', 'noise'].includes(item.classification);
+        case 'included': return candidateIncluded(item);
+        case 'not_included': return !candidateIncluded(item);
+        case 'indie_relevant': return category === 'indie_relevant' || baseCategory === 'indie_relevant';
+        case 'aaa_or_major_publisher': return category === 'aaa_or_major_publisher' || baseCategory === 'aaa_or_major_publisher' || !!item.is_major_publisher;
+        case 'industry_classic': return category === 'industry_classic' || baseCategory === 'industry_classic' || !!item.is_industry_classic;
+        case 'uncertain': return category === 'uncertain' || baseCategory === 'uncertain';
+        case 'low_signal': return category === 'low_signal' || baseCategory === 'low_signal';
         default: return true;
       }
     }
     function candidateMatchesSearch(item) {
       const query = state.candidateSearch.trim().toLowerCase();
       if (!query) return true;
-      const text = [item.title, item.steam_appid, item.primary_source, item.user_control_type, item.pipeline_status, item.classification, item.reasoning, item.overlapping_tags].join(' ').toLowerCase();
+      const text = [item.title, item.developer, item.publisher, item.steam_appid, item.primary_source, item.comp_lane, item.pipeline_status, item.classification, item.comp_exclusion_category, item.classification_override, item.classification_reason, item.reasoning, item.classification_notes, item.aaa_reason, item.classic_reason, item.overlapping_tags].join(' ').toLowerCase();
       return text.includes(query);
     }
     function candidateSortValue(item, key) {
-      if (key === 'title' || key === 'classification') return String(item[key] || '').toLowerCase();
+      if (key === 'title' || key === 'publisher' || key === 'developer') return String(item[key] || '').toLowerCase();
+      if (key === 'classification') return String(effectiveCompClassification(item)).toLowerCase();
+      if (key === 'comp_lane') return String(item.classification || '').toLowerCase();
+      if (key === 'confidence') {
+        const confidence = String(classificationConfidenceValue(item) || '').toLowerCase();
+        return { high: 3, medium: 2, low: 1 }[confidence] ?? 0;
+      }
+      if (key === 'included') return candidateIncluded(item) ? 0 : 1;
+      if (key === 'review_count') return Number(item.review_count ?? Number.NEGATIVE_INFINITY);
+      if (key === 'fit_score') return Number(item.fit_score ?? Number.NEGATIVE_INFINITY);
+      if (key === 'final_rank') return Number(item.final_rank ?? Number.NEGATIVE_INFINITY);
       const value = item[key];
       if (value === null || value === undefined || value === '') return Number.NEGATIVE_INFINITY;
       return Number(value);
@@ -1449,7 +1564,7 @@
     }
     function includeToggleHtml(item, context = 'table') {
       const pending = state.pendingCandidateIds.has(item.candidate_id);
-      const included = !!item.is_selected_for_report;
+      const included = candidateIncluded(item);
       const label = pending ? 'Saving...' : included ? 'Included' : 'Not Included';
       const cls = included ? 'is-included' : 'not-included';
       const aria = included ? `Included in report for ${item.title || 'candidate'}` : `Not included in report for ${item.title || 'candidate'}`;
@@ -1496,7 +1611,7 @@
       const rows = sortedCandidates(state.candidates.filter(candidateMatchesFilter).filter(candidateMatchesSearch));
       if (!rows.length) {
         state.expandedCandidateId = null;
-        $('summaryTable').innerHTML = '<tr><td colspan="11">No candidates for this filter/search.</td></tr>';
+        $('summaryTable').innerHTML = '<tr><td colspan="16">No candidates for this filter/search.</td></tr>';
         return;
       }
       if (state.expandedCandidateId && !rows.some(item => item.candidate_id === state.expandedCandidateId)) {
@@ -1508,13 +1623,18 @@
           <td>${includeToggleHtml(item)}</td>
           <td>${escapeHtml(item.final_rank || '')}</td>
           <td><span class="title-cell-main"><span class="candidate-title">${escapeHtml(item.title || '')}</span></span></td>
-          <td class="candidate-col-source">${sourceBadge(item.primary_source)}</td>
-          <td class="candidate-col-status">${statusBadge(item.pipeline_status)}</td>
+          <td>${escapeHtml(item.developer || '—')}</td>
+          <td>${escapeHtml(item.publisher || '—')}</td>
           <td>${escapeHtml(item.review_count || 0)}</td>
           <td>${item.fit_score == null ? '' : Number(item.fit_score).toFixed(1)}</td>
-          <td class="candidate-col-classification">${classificationBadge(item.classification)}</td>
-          <td>${item.confidence == null ? '' : Number(item.confidence).toFixed(2)}</td>
-          <td>${escapeHtml(item.reasoning || item.overlapping_tags || '')}</td>
+          <td class="candidate-col-comp-lane">${classificationBadge(item.classification)}</td>
+          <td class="candidate-col-classification">${exclusionBadge(effectiveCompClassification(item))}</td>
+          <td>${classificationColumnConfidence(item)}</td>
+          <td class="candidate-col-aaa">${item.is_major_publisher ? badge('Yes', 'badge-red') : badge('No', 'badge-gray')}</td>
+          <td class="candidate-col-classic">${item.is_industry_classic ? badge('Yes', 'badge-amber') : badge('No', 'badge-gray')}</td>
+          <td>${escapeHtml(classificationReason(item))}</td>
+          <td class="candidate-col-source">${sourceBadge(item.primary_source)}</td>
+          <td class="candidate-col-status">${statusBadge(item.pipeline_status)}</td>
         </tr>
         ${state.expandedCandidateId === item.candidate_id ? candidateDetailsRow(item) : ''}
       `).join('');
@@ -1522,7 +1642,7 @@
     function candidateDetailsRow(item) {
       return `
         <tr>
-          <td colspan="11">
+          <td colspan="16">
             <div class="candidate-detail-card" id="candidate-details-${escapeHtml(item.candidate_id)}">
               <div class="candidate-detail-header">
                 <div class="candidate-detail-title">${escapeHtml(item.title || 'Candidate details')}</div>
@@ -1534,15 +1654,36 @@
                   <div class="candidate-detail-meta">
                     ${includeToggleHtml(item, 'details')}
                     ${classificationBadge(item.classification) || ''}
+                    ${exclusionBadge(effectiveCompClassification(item)) || ''}
                     ${sourceBadge(item.primary_source) || ''}
                     ${controlBadge(item.user_control_type) || ''}
                     ${item.is_user_required ? badge('Required', 'badge-purple') : ''}
                     ${item.is_benchmark_only ? badge('Benchmark', 'badge-amber') : ''}
                   </div>
                   <div><span class="detail-label">Steam App ID:</span> ${escapeHtml(item.steam_appid || '—')}</div>
-                  <div><span class="detail-label">Fit:</span> ${item.fit_score == null ? '—' : Number(item.fit_score).toFixed(1)} · <span class="detail-label">Confidence:</span> ${item.confidence == null ? '—' : Number(item.confidence).toFixed(2)} · <span class="detail-label">Reviews:</span> ${escapeHtml(item.review_count || 0)}</div>
+                  <div><span class="detail-label">Developer:</span> ${escapeHtml(item.developer || '—')} · <span class="detail-label">Publisher:</span> ${escapeHtml(item.publisher || '—')}</div>
+                  <div><span class="detail-label">Original Score / Fit Details:</span> Fit ${item.fit_score == null ? '—' : Number(item.fit_score).toFixed(1)} · Comp Lane Confidence ${item.confidence == null ? '—' : Number(item.confidence).toFixed(2)} · Reviews ${escapeHtml(item.review_count || 0)}</div>
+                  <div><span class="detail-label">AAA Reason:</span> ${escapeHtml(item.aaa_reason || '—')}</div>
+                  <div><span class="detail-label">Classic Reason:</span> ${escapeHtml(item.classic_reason || '—')}</div>
+                  <div><span class="detail-label">Classification Notes:</span> ${escapeHtml(item.classification_notes || '—')}</div>
+                  <div><span class="detail-label">Source:</span> ${sourceBadge(item.primary_source)}${item.major_publisher_match ? ` · ${escapeHtml(item.major_publisher_match)}` : ''}</div>
+                  <div><span class="detail-label">Status:</span> ${statusBadge(item.pipeline_status)}</div>
                   <div><span class="detail-label">Overlapping Tags:</span> ${escapeHtml(Array.isArray(item.overlapping_tags) ? item.overlapping_tags.join(', ') : item.overlapping_tags || '—')}</div>
-                  <div><span class="detail-label">Reasoning:</span> ${escapeHtml(item.reasoning || '—')}</div>
+                  <div><span class="detail-label">Comp Lane Reasoning:</span> ${escapeHtml(item.reasoning || '—')}</div>
+                  <div><span class="detail-label">Classification Reason:</span> ${escapeHtml(classificationReason(item))}</div>
+                  <label><span class="detail-label">Classification Override</span>
+                    <select class="candidate-classification-override" data-id="${escapeHtml(item.candidate_id)}">
+                      <option value="">Auto</option>
+                      <option value="indie_relevant" ${item.classification_override === 'indie_relevant' ? 'selected' : ''}>Indie Relevant</option>
+                      <option value="aaa_or_major_publisher" ${item.classification_override === 'aaa_or_major_publisher' ? 'selected' : ''}>AAA / Major Publisher</option>
+                      <option value="industry_classic" ${item.classification_override === 'industry_classic' ? 'selected' : ''}>Industry Classic</option>
+                      <option value="low_signal" ${item.classification_override === 'low_signal' ? 'selected' : ''}>Low Signal</option>
+                      <option value="uncertain" ${item.classification_override === 'uncertain' ? 'selected' : ''}>Uncertain</option>
+                    </select>
+                  </label>
+                  <label><span class="detail-label">Classification Notes</span>
+                    <textarea class="candidate-classification-notes" data-id="${escapeHtml(item.candidate_id)}" rows="3" placeholder="Optional reviewer notes">${escapeHtml(item.classification_notes || '')}</textarea>
+                  </label>
                   <div class="small"><span class="detail-label">Advanced/debug:</span> backend excluded flag = ${item.is_user_excluded ? 'true' : 'false'}, pipeline status = ${escapeHtml(item.pipeline_status || '—')}</div>
                 </div>
               </div>
@@ -1706,7 +1847,7 @@
         return;
       }
       try {
-        await createRunEvent('candidate_set_approved', 'Comps confirmed for report by user', 'classification', { selected_count: state.candidates.filter(c => c.is_selected_for_report).length });
+        await createRunEvent('candidate_set_approved', 'Comps confirmed for report by user', 'classification', { selected_count: state.candidates.filter(candidateIncluded).length });
         $('actionStatus').textContent = 'Comps confirmed for report. Reports can now be generated.';
         await refreshWorkspaceData();
       } catch (error) {
@@ -1749,13 +1890,16 @@
         $('actionStatus').textContent = `Candidate update failed: ${error.message}`;
       }
     }
-    async function toggleCandidateInclusion(candidateId) {
-      const candidate = state.candidates.find(item => item.candidate_id === candidateId);
-      if (!candidate || state.pendingCandidateIds.has(candidateId)) return;
-      const previousSelected = !!candidate.is_selected_for_report;
-      const nextSelected = !previousSelected;
-      state.pendingCandidateIds.add(candidateId);
+    async function updateCandidateClassification(candidateId, updates, changeReason) {
+      await updateCandidate(candidateId, updates, changeReason);
+    }
+    async function setCandidateInclusion(candidate, nextSelected, options = {}) {
+      const shouldRefresh = options.refresh ?? true;
+      if (!candidate || state.pendingCandidateIds.has(candidate.candidate_id)) return;
+      const previousSelected = candidateIncluded(candidate);
+      state.pendingCandidateIds.add(candidate.candidate_id);
       candidate.is_selected_for_report = nextSelected;
+      candidate.include_in_report = nextSelected;
       candidate.is_shortlisted = nextSelected ? true : candidate.is_shortlisted;
       candidate.pipeline_status = nextSelected ? 'selected_for_report' : (candidate.classification ? 'classified' : candidate.pipeline_status || 'scored');
       renderCandidateSummary();
@@ -1764,7 +1908,7 @@
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            id: candidateId,
+            id: candidate.candidate_id,
             updates: {
               is_selected_for_report: nextSelected,
               is_shortlisted: nextSelected ? true : candidate.is_shortlisted,
@@ -1776,19 +1920,53 @@
           nextSelected ? 'candidate_included_for_report' : 'candidate_removed_from_report',
           nextSelected ? 'Candidate included for report' : 'Candidate removed from report',
           'classification',
-          { candidate_id: candidateId, title: candidate.title, is_selected_for_report: nextSelected }
+          { candidate_id: candidate.candidate_id, title: candidate.title, include_in_report: nextSelected }
         );
-        await markCandidateSetChanged({ candidate_id: candidateId, title: candidate.title, is_selected_for_report: nextSelected });
+        await markCandidateSetChanged({ candidate_id: candidate.candidate_id, title: candidate.title, include_in_report: nextSelected });
         $('actionStatus').textContent = nextSelected ? 'Candidate included in report.' : 'Candidate removed from report.';
       } catch (error) {
         candidate.is_selected_for_report = previousSelected;
+        candidate.include_in_report = previousSelected;
         candidate.pipeline_status = previousSelected ? 'selected_for_report' : (candidate.classification ? 'classified' : candidate.pipeline_status || 'scored');
         $('actionStatus').textContent = 'Could not update report inclusion. Please try again.';
       } finally {
-        state.pendingCandidateIds.delete(candidateId);
+        state.pendingCandidateIds.delete(candidate.candidate_id);
         renderCandidateSummary();
-        await refreshWorkspaceData();
+        if (shouldRefresh) await refreshWorkspaceData();
       }
+    }
+    async function toggleCandidateInclusion(candidateId) {
+      const candidate = state.candidates.find(item => item.candidate_id === candidateId);
+      if (!candidate) return;
+      await setCandidateInclusion(candidate, !candidateIncluded(candidate));
+    }
+    async function bulkSetInclusion(predicate, nextSelected, message) {
+      const matching = state.candidates.filter(predicate);
+      if (!matching.length) {
+        $('actionStatus').textContent = 'No candidates matched that bulk action.';
+        return;
+      }
+      if (!window.confirm(`${message} (${matching.length} candidates)?`)) return;
+      $('actionStatus').textContent = `${message}...`;
+      for (const candidate of matching) {
+        await setCandidateInclusion(candidate, nextSelected, { refresh: false });
+      }
+      await refreshWorkspaceData();
+      $('actionStatus').textContent = `${message} completed.`;
+    }
+    async function applyClassificationOverride(candidateId, overrideValue) {
+      const candidate = state.candidates.find(item => item.candidate_id === candidateId);
+      if (!candidate) return;
+      candidate.classification_override = overrideValue || null;
+      renderCandidateSummary();
+      await updateCandidateClassification(
+        candidateId,
+        { classification_override: overrideValue || null },
+        overrideValue ? 'Classification override updated.' : 'Classification override cleared.'
+      );
+    }
+    async function updateClassificationNotes(candidateId, notes) {
+      await updateCandidateClassification(candidateId, { classification_notes: notes || null }, 'Classification notes updated.');
     }
     async function runFullPipeline() {
       if (!state.currentRun) return;
@@ -1862,6 +2040,10 @@
       state.candidateSortDirection = event.target.value;
       renderCandidateSummary();
     });
+    $('btnBulkIncludeIndie').addEventListener('click', () => bulkSetInclusion(item => effectiveCompClassification(item) === 'indie_relevant', true, 'Including all Indie Relevant candidates'));
+    $('btnBulkExcludeAaa').addEventListener('click', () => bulkSetInclusion(item => effectiveCompClassification(item) === 'aaa_or_major_publisher' || !!item.is_major_publisher, false, 'Excluding all AAA / Major Publisher candidates'));
+    $('btnBulkExcludeClassics').addEventListener('click', () => bulkSetInclusion(item => effectiveCompClassification(item) === 'industry_classic' || !!item.is_industry_classic, false, 'Excluding all Industry Classic candidates'));
+    $('btnBulkExcludeLowSignal').addEventListener('click', () => bulkSetInclusion(item => effectiveCompClassification(item) === 'low_signal', false, 'Excluding all Low Signal candidates'));
     $('summaryTable').addEventListener('click', event => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
@@ -1880,6 +2062,18 @@
       if (target.classList.contains('hide-details')) {
         state.expandedCandidateId = null;
         renderCandidateSummary();
+      }
+    });
+    $('summaryTable').addEventListener('change', event => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const candidateId = target.dataset.id;
+      if (!candidateId) return;
+      if (target.classList.contains('candidate-classification-override')) {
+        applyClassificationOverride(candidateId, target.value);
+      }
+      if (target.classList.contains('candidate-classification-notes')) {
+        updateClassificationNotes(candidateId, target.value);
       }
     });
     reportsList.addEventListener('click', async event => {

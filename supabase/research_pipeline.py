@@ -17,6 +17,7 @@ from .client import SupabaseClient
 from .pipeline_logging import log_step, log_step_event
 from .research_run_service import addRunEvent, addRunProgressEvent, markCandidateSetChangedAfterApproval, prepareRunCandidates, updateResearchRunStatus
 from .review_pipeline import runReviewPipeline
+from .comp_classification import classify_comp_metadata
 from .steam_store import fetch_app_details, fetch_page_signals, normalize_app_details
 from .steam_utils import canonical_steam_url
 
@@ -495,6 +496,12 @@ def existing_candidate_by_appid(run_id: str, appid: int) -> dict[str, Any] | Non
     return one('run_candidates', {'run_id': f'eq.{run_id}', 'steam_appid': f'eq.{appid}'})
 
 
+def persist_comp_classification(candidate: dict[str, Any], app: dict[str, Any] | None) -> dict[str, Any]:
+    classification = classify_comp_metadata(candidate, app)
+    client.update('run_candidates', {'id': f"eq.{candidate['id']}"}, classification, returning='minimal')
+    return classification
+
+
 def add_discovered_candidate(run: dict[str, Any], appid: int, rank: int, source_payload: dict[str, Any]) -> dict[str, Any] | None:
     existing = existing_candidate_by_appid(run['id'], appid)
     app = one('steam_apps', {'appid': f'eq.{appid}'}) or {'name': f'Steam App {appid}'}
@@ -529,6 +536,7 @@ def add_discovered_candidate(run: dict[str, Any], appid: int, rank: int, source_
             'raw_evidence_json': source_payload,
         }
         client.insert('candidate_discovery_evidence', evidence, returning='minimal')
+        persist_comp_classification(candidate, app)
     return candidate
 
 
@@ -864,6 +872,8 @@ def enrich_run(run_id: str) -> dict[str, Any]:
         try:
             upsert_enriched_steam_app(appid, country=country, language=language, run_id=run_id)
             enriched_appids.add(appid)
+            app = one('steam_apps', {'appid': f'eq.{appid}'}) or {'appid': appid}
+            persist_comp_classification(candidate, app)
             if candidate.get('pipeline_status') == 'discovered':
                 client.update('run_candidates', {'id': f"eq.{candidate['id']}"}, {'pipeline_status': 'enriched'}, returning='minimal')
             games_processed += 1
@@ -1558,6 +1568,19 @@ def classify_run(rule_id: str, run_id: str) -> dict[str, Any]:
     addRunEvent(run_id, 'classification', 'stage_started', 'Candidate classification started')
     log_step_event('07_llm_classify_comps', 'started', run_id=run_id, message='Started competitor classification')
     rows = client.select('v_run_candidate_summary', '*', {'run_id': f'eq.{run_id}'})
+    for row in rows:
+        try:
+            appid = as_int(row.get('steam_appid'))
+            app = one('steam_apps', {'appid': f'eq.{appid}'}) if appid else None
+            persist_comp_classification({'id': row['candidate_id'], **row}, app)
+        except Exception as exc:
+            addRunEvent(
+                run_id,
+                'classification',
+                'comp_classification_refresh_failed',
+                f"Failed to refresh AAA / Classic metadata for {row.get('title')}",
+                {'candidate_id': row.get('candidate_id'), 'steam_appid': row.get('steam_appid'), 'error': str(exc)},
+            )
     model = openai_model_name()
     prompt_version = rule_id
     model_version = 'rule_based'
