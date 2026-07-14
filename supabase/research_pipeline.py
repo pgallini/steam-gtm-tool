@@ -1404,13 +1404,28 @@ Keep reasoning concise and practical.
 def classify_run(rule_id: str, run_id: str) -> dict[str, Any]:
     require_prior_stage(run_id, 'classification', 'scoring', 'Filter, Score & Shortlist Candidates')
     updateResearchRunStatus(run_id, 'running', current_stage='classification')
-    addRunEvent(run_id, 'classification', 'stage_started', 'Candidate classification started')
-    log_step_event('07_llm_classify_comps', 'started', run_id=run_id, message='Started competitor classification')
     rows = client.select('v_run_candidate_summary', '*', {'run_id': f'eq.{run_id}'})
+    total_candidates = len(rows)
+    addRunEvent(
+        run_id,
+        'classification',
+        'stage_started',
+        'Candidate classification started',
+        {'processed_count': 0, 'total_count': total_candidates, 'unit': 'games'},
+    )
+    log_step_event('07_llm_classify_comps', 'started', run_id=run_id, message='Started competitor classification')
+
+    appids = sorted({as_int(row.get('steam_appid')) for row in rows if row.get('steam_appid')})
+    steam_apps_by_appid: dict[int, dict[str, Any]] = {}
+    if appids:
+        app_filters = {'appid': f'in.({",".join(str(appid) for appid in appids)})'}
+        for app in client.select('steam_apps', '*', app_filters):
+            steam_apps_by_appid[int(app.get('appid'))] = app
+
     for row in rows:
         try:
             appid = as_int(row.get('steam_appid'))
-            app = one('steam_apps', {'appid': f'eq.{appid}'}) if appid else None
+            app = steam_apps_by_appid.get(appid) if appid else None
             persist_comp_classification({'id': row['candidate_id'], **row}, app)
         except Exception as exc:
             addRunEvent(
@@ -1445,6 +1460,8 @@ def classify_run(rule_id: str, run_id: str) -> dict[str, Any]:
         except Exception as exc:
             addRunEvent(run_id, 'classification', 'llm_classification_failed', 'OpenAI classification failed; falling back to rule-based classification', {'model': model, 'error': str(exc)})
 
+    classified_records: list[dict[str, Any]] = []
+    progress_interval = max(1, int(os.getenv('STEAM_GTM_CLASSIFICATION_PROGRESS_EVENT_INTERVAL') or 10))
     count = 0
     for index, row in enumerate(rows, start=1):
         llm_result = llm_results.get(str(row['candidate_id']))
@@ -1484,27 +1501,33 @@ def classify_run(rule_id: str, run_id: str) -> dict[str, Any]:
             'llm_input_json': row,
             'llm_output_json': {**(llm_result or result), **enhancement},
         }
-        existing = one(
-            'candidate_classifications',
-            {'candidate_id': f"eq.{row['candidate_id']}", 'prompt_version': f'eq.{payload["prompt_version"]}'},
-        )
-        if existing:
-            client.update('candidate_classifications', {'id': f"eq.{existing['id']}"}, payload, returning='minimal')
-        else:
-            client.insert('candidate_classifications', payload, returning='minimal')
+        classified_records.append(payload)
         log_step('07_llm_classify_comps', run_id=run_id, message='Classified candidate', candidate_id=row['candidate_id'], classification=payload['classification'], confidence=payload['confidence'])
-        if row.get('pipeline_status') != 'excluded_by_user':
-            client.update('run_candidates', {'id': f"eq.{row['candidate_id']}"}, {'pipeline_status': 'classified'}, returning='minimal')
         count += 1
-        addRunProgressEvent(
-            run_id,
-            'classification',
-            index,
-            len(rows),
-            unit='games',
-            message='Classifying candidates',
-            details={'candidate_id': row['candidate_id'], 'title': row.get('title'), 'classification': payload['classification']},
+        if index % progress_interval == 0 or index == len(rows):
+            addRunProgressEvent(
+                run_id,
+                'classification',
+                index,
+                len(rows),
+                unit='games',
+                message='Classifying candidates',
+                details={'candidate_id': row['candidate_id'], 'title': row.get('title'), 'classification': payload['classification']},
+            )
+    if classified_records:
+        client.upsert_batches(
+            'candidate_classifications',
+            classified_records,
+            on_conflict='candidate_id,prompt_version',
+            batch_size=100,
+            returning='minimal',
         )
+    client.update(
+        'run_candidates',
+        {'run_id': f'eq.{run_id}', 'is_user_excluded': 'is.false'},
+        {'pipeline_status': 'classified'},
+        returning='minimal',
+    )
     addRunEvent(run_id, 'classification', 'stage_completed', 'Candidate classification completed', {'processed_count': count, 'unit': 'games', 'classified_count': count, 'model_version': model_version, 'prompt_version': prompt_version})
     log_step_event('07_llm_classify_comps', 'completed', run_id=run_id, message='Completed competitor classification', classified_count=count, model_version=model_version, prompt_version=prompt_version)
     return {'classified_count': count, 'model_version': model_version, 'prompt_version': prompt_version}

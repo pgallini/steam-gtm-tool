@@ -151,7 +151,7 @@ def upsert_review(payload: dict[str, Any]) -> None:
     client.insert('steam_reviews', payload, returning='minimal')
 
 
-def collect_reviews_for_candidate(candidate: dict[str, Any], *, max_pages: int, language: str, num_per_page: int) -> dict[str, Any]:
+def collect_reviews_for_candidate(candidate: dict[str, Any], *, max_pages: int, language: str, num_per_page: int, candidate_index: int | None = None, total_candidates: int | None = None) -> dict[str, Any]:
     appid = as_int(candidate.get('steam_appid'))
     if not appid:
         return {'candidate_id': candidate.get('id'), 'positive': 0, 'negative': 0, 'total': 0, 'status': 'skipped'}
@@ -182,7 +182,15 @@ def collect_reviews_for_candidate(candidate: dict[str, Any], *, max_pages: int, 
                     counts['positive'] + counts['negative'],
                     unit='reviews',
                     message='Collecting Tier 1 reviews',
-                    details={'candidate_id': candidate['id'], 'appid': appid, 'review_type': review_type, 'review_count': counts[review_type]},
+                    details={
+                        'candidate_id': candidate['id'],
+                        'appid': appid,
+                        'review_type': review_type,
+                        'review_count': counts[review_type],
+                        'candidate_index': candidate_index,
+                        'total_candidates': total_candidates,
+                        'title': candidate.get('title'),
+                    },
                 )
                 data = fetch_reviews_page(appid, review_type=review_type, cursor=cursor, language=language, num_per_page=num_per_page)
                 reviews = data.get('reviews') or []
@@ -664,8 +672,17 @@ def runReviewPipeline(run_id: str) -> dict[str, Any]:
     candidates = (tier1_candidates or selected_candidates)[:candidate_limit]
     collection_results = []
     for index, candidate in enumerate(candidates, start=1):
+        collection_result: dict[str, Any] | None = None
         try:
-            collection_results.append(collect_reviews_for_candidate(candidate, max_pages=max_pages, language=language, num_per_page=num_per_page))
+            collection_result = collect_reviews_for_candidate(
+                candidate,
+                max_pages=max_pages,
+                language=language,
+                num_per_page=num_per_page,
+                candidate_index=index,
+                total_candidates=len(candidates),
+            )
+            collection_results.append(collection_result)
         except Exception as exc:
             addRunEvent(run_id, 'review_collection', 'candidate_review_collection_failed', f"Failed to collect reviews for {candidate.get('title')}", {'error': str(exc)})
         addRunProgressEvent(
@@ -675,7 +692,13 @@ def runReviewPipeline(run_id: str) -> dict[str, Any]:
             len(candidates),
             unit='games',
             message='Collecting Tier 1 reviews',
-            details={'candidate_id': candidate.get('id'), 'title': candidate.get('title')},
+            details={
+                'candidate_id': candidate.get('id'),
+                'title': candidate.get('title'),
+                'candidate_index': index,
+                'total_candidates': len(candidates),
+                'review_count': collection_result.get('total') if collection_result else None,
+            },
         )
 
     addRunEvent(run_id, 'review_collection', 'stage_completed', 'Review collection completed', {'collections': collection_results, 'processed_count': len(candidates), 'unit': 'games'})

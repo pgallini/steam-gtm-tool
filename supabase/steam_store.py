@@ -4,6 +4,7 @@ import html
 import json
 import re
 import time
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
@@ -15,15 +16,29 @@ from .pipeline_logging import log_step, log_step_event
 
 APP_DETAILS_URL = 'https://store.steampowered.com/api/appdetails'
 STORE_APP_URL = 'https://store.steampowered.com/app/{appid}/'
+DEFAULT_STEAM_TIMEOUT_SECONDS = 45
 MAX_STEAM_FETCH_RETRIES = 4
 
 
-def clean_text(value: str | None) -> str:
-    if not value:
-        return ''
-    return re.sub(r'\s+', ' ', value).strip()
+@dataclass
+class SteamFetchResult:
+    appid: int
+    success: bool
+    status: str
+    http_status: int | None
+    data: dict[str, Any] | None
+    error: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {'success': self.success}
+        if self.error is not None:
+            payload['error'] = self.error
+        if self.data is not None:
+            payload['data'] = self.data
+        return payload
 
 
+@lru_cache(maxsize=1)
 def steam_session() -> requests.Session:
     session = requests.Session()
     session.headers.update(
@@ -32,7 +47,6 @@ def steam_session() -> requests.Session:
             'Accept-Language': 'en-US,en;q=0.9',
         }
     )
-    # Helps with age-gated/mature store pages.
     session.cookies.set('birthtime', '568022401', domain='.steampowered.com')
     session.cookies.set('lastagecheckage', '1-January-1988', domain='.steampowered.com')
     session.cookies.set('mature_content', '1', domain='.steampowered.com')
@@ -40,55 +54,49 @@ def steam_session() -> requests.Session:
 
 
 def _backoff_seconds(attempt: int) -> float:
-    return min(30.0, 2.0 ** attempt)
+    return min(120.0, 2.0 ** attempt)
+
+
+def _get_retry_after(response: requests.Response, attempt: int) -> float:
+    header_value = response.headers.get('Retry-After')
+    if header_value:
+        try:
+            wait = int(header_value)
+            return max(1.0, min(wait, 120.0))
+        except ValueError:
+            pass
+    return _backoff_seconds(attempt)
 
 
 def _get_with_retry(url: str, *, params: dict[str, Any], run_id: str | None, step_key: str, appid: int) -> requests.Response | None:
     last_error: Exception | None = None
     for attempt in range(1, MAX_STEAM_FETCH_RETRIES + 1):
         try:
-            response = steam_session().get(url, params=params, timeout=45)
+            response = steam_session().get(url, params=params, timeout=DEFAULT_STEAM_TIMEOUT_SECONDS)
             if response.status_code == 429:
-                wait_seconds = _backoff_seconds(attempt)
+                wait_seconds = _get_retry_after(response, attempt)
                 log_step(step_key, run_id=run_id, message='Steam rate limit hit', appid=appid, attempt=attempt, wait_seconds=wait_seconds, url=url)
+                if attempt == MAX_STEAM_FETCH_RETRIES:
+                    raise requests.exceptions.RetryError('Steam rate limited')
                 time.sleep(wait_seconds)
                 continue
             response.raise_for_status()
             return response
-        except Exception as exc:
+        except requests.exceptions.RequestException as exc:
             last_error = exc
-            wait_seconds = _backoff_seconds(attempt)
+            if isinstance(exc, requests.exceptions.RetryError):
+                break
+            wait_seconds = _get_retry_after(getattr(exc, 'response', None) or requests.Response(), attempt)
             log_step(step_key, run_id=run_id, message='Steam request retrying after error', appid=appid, attempt=attempt, wait_seconds=wait_seconds, error=str(exc), url=url)
+            if attempt == MAX_STEAM_FETCH_RETRIES:
+                break
             time.sleep(wait_seconds)
     if last_error is not None:
         log_step(step_key, run_id=run_id, message='Steam request exhausted retries', appid=appid, error=str(last_error), url=url)
     return None
 
 
-@lru_cache(maxsize=2048)
-def _cached_app_details(appid: int, country: str, language: str) -> dict[str, Any]:
-    response = steam_session().get(
-        APP_DETAILS_URL,
-        params={'appids': str(appid), 'cc': country, 'l': language},
-        timeout=45,
-    )
-    response.raise_for_status()
-    payload = response.json().get(str(appid), {'success': False})
-    return payload if isinstance(payload, dict) else {'success': False}
-
-
-@lru_cache(maxsize=2048)
-def _cached_store_page(appid: int, country: str, language: str) -> str:
-    response = steam_session().get(
-        STORE_APP_URL.format(appid=appid),
-        params={'cc': country, 'l': language},
-        timeout=45,
-    )
-    response.raise_for_status()
-    return response.text
-
-
-def fetch_app_details(appid: int, *, country: str = 'us', language: str = 'english', run_id: str | None = None) -> dict[str, Any]:
+def fetch_app_details_result(appid: int, *, country: str = 'us', language: str = 'english', run_id: str | None = None) -> SteamFetchResult:
     try:
         log_step_event('03_get_app_details', 'started', run_id=run_id, message='Started Steam app details fetch', appid=appid, country=country, language=language)
         response = _get_with_retry(
@@ -99,26 +107,39 @@ def fetch_app_details(appid: int, *, country: str = 'us', language: str = 'engli
             appid=appid,
         )
         if response is None:
-            payload = {'success': False, 'error': 'rate_limited_or_failed'}
+            result = SteamFetchResult(appid=appid, success=False, status='steam_rate_limited', http_status=None, data=None, error='rate_limited_or_failed')
         else:
-            payload = response.json().get(str(appid), {'success': False})
-        if not isinstance(payload, dict):
-            payload = {'success': False}
-        data = payload.get('data') if payload.get('success') else None
+            http_status = response.status_code
+            try:
+                payload = response.json()
+            except ValueError as exc:
+                log_step('03_get_app_details', run_id=run_id, message='Steam app details invalid JSON', appid=appid, error=str(exc))
+                return SteamFetchResult(appid=appid, success=False, status='steam_invalid_json', http_status=http_status, data=None, error='invalid_json')
+            app_payload = payload.get(str(appid), {'success': False})
+            if not isinstance(app_payload, dict):
+                app_payload = {'success': False}
+            success = bool(app_payload.get('success', False))
+            status = 'success' if success else 'steam_success_false'
+            result = SteamFetchResult(appid=appid, success=success, status=status, http_status=http_status, data=app_payload.get('data'), error=None if success else app_payload.get('error') or 'steam_success_false')
         log_step(
             '03_get_app_details',
             run_id=run_id,
             message='Fetched Steam app details',
             appid=appid,
-            success=bool(payload.get('success')),
-            name=(data or {}).get('name') if isinstance(data, dict) else None,
+            success=result.success,
+            status=result.status,
+            http_status=result.http_status,
         )
-        log_step_event('03_get_app_details', 'completed', run_id=run_id, message='Completed Steam app details fetch', appid=appid, success=bool(payload.get('success')))
-        return payload
+        log_step_event('03_get_app_details', 'completed', run_id=run_id, message='Completed Steam app details fetch', appid=appid, success=result.success, status=result.status)
+        return result
     except Exception as exc:
         log_step('03_get_app_details', run_id=run_id, message='Steam app details fetch failed', appid=appid, error=str(exc))
         log_step_event('03_get_app_details', 'completed', run_id=run_id, message='Steam app details fetch failed', appid=appid, error=str(exc))
-        return {'success': False, 'error': str(exc)}
+        return SteamFetchResult(appid=appid, success=False, status='steam_http_error', http_status=None, data=None, error=str(exc))
+
+
+def fetch_app_details(appid: int, *, country: str = 'us', language: str = 'english', run_id: str | None = None) -> dict[str, Any]:
+    return fetch_app_details_result(appid, country=country, language=language, run_id=run_id).to_dict()
 
 
 def fetch_store_page(appid: int, *, country: str = 'us', language: str = 'english', run_id: str | None = None) -> str:
@@ -132,6 +153,14 @@ def fetch_store_page(appid: int, *, country: str = 'us', language: str = 'englis
     if response is None:
         raise RuntimeError('Steam store page request failed after retries')
     return response.text
+
+
+# Existing page signal extraction helpers below remain unchanged.
+
+def clean_text(value: str | None) -> str:
+    if not value:
+        return ''
+    return re.sub(r'\s+', ' ', value).strip()
 
 
 def extract_tags(soup: BeautifulSoup) -> list[dict[str, Any]]:
@@ -294,5 +323,7 @@ def normalize_app_details(appid: int, response_for_app: dict[str, Any]) -> dict[
         'recommendations': data.get('recommendations'),
         'metacritic': data.get('metacritic'),
         'short_description': data.get('short_description'),
+        'header_image': data.get('header_image'),
+        'platforms': data.get('platforms'),
         'raw': data,
     }

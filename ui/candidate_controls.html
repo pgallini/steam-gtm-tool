@@ -951,6 +951,41 @@
       if (stepKey === 'review_collection') return 'games';
       return 'games';
     }
+    function reviewCollectionProgressText(event) {
+      const details = event?.details || {};
+      const candidateIndex = detailsCount(details, ['candidate_index']);
+      const totalCandidates = detailsCount(details, ['total_candidates', 'candidate_total']);
+      const reviewCount = detailsCount(details, ['review_count', 'total_review_count', 'total']);
+      const candidateTitle = details.title ? `${details.title}` : null;
+      if (candidateIndex != null && totalCandidates != null) {
+        const candidatePrefix = `Candidate ${candidateIndex} of ${totalCandidates}`;
+        if (reviewCount != null) {
+          const reviewLabel = reviewCount === 1 ? 'review' : 'reviews';
+          return `${candidatePrefix} — ${reviewCount} ${reviewLabel} collected`;
+        }
+        return `${candidatePrefix} processed`;
+      }
+      if (reviewCount != null) {
+        const reviewLabel = reviewCount === 1 ? 'review' : 'reviews';
+        return `${reviewCount} ${reviewLabel} collected`;
+      }
+      if (candidateTitle) {
+        return `Collecting reviews for ${candidateTitle}`;
+      }
+      return 'Collecting Tier 1 reviews...';
+    }
+    function progressTextForStep(stepKey, event) {
+      if (stepKey === 'review_collection') {
+        return reviewCollectionProgressText(event);
+      }
+      const count = processStepCount(stepKey, event);
+      const unit = processStepUnit(stepKey, event);
+      const total = detailsCount(event?.details || {}, ['total_count']);
+      if (count != null) {
+        return total != null ? `${count} / ${total} ${unit} processed` : `${count} ${unit} processed`;
+      }
+      return 'Processing...';
+    }
     function processStepIndex(stepKey) {
       const index = processStepOrder.indexOf(stepKey);
       return index === -1 ? Number.POSITIVE_INFINITY : index;
@@ -977,13 +1012,7 @@
       const isActiveStage = state.currentRun?.status === 'running' && state.currentRun?.current_stage === step.key;
       if (isActiveStage || progressEvent) {
         const event = progressEvent || latestRunEvent(step.key, ['stage_started']);
-        const count = processStepCount(step.key, event);
-        const unit = processStepUnit(step.key, event);
-        const total = detailsCount(event?.details || {}, ['total_count']);
-        const text = count != null
-          ? (total != null ? `${count} / ${total} ${unit} processed` : `${count} ${unit} processed`)
-          : 'Processing...';
-        return { status: 'running', icon: '●', text };
+        return { status: 'running', icon: '●', text: progressTextForStep(step.key, event) };
       }
       if (state.currentRun?.status === 'completed' || (state.currentRun?.status === 'running' && stepIndex < activeStageIndex)) {
         const event = completedEvent || progressEvent;
@@ -1248,7 +1277,7 @@
           fetchJson('run_candidate_controls', `run_id=${encodeURIComponent(runId)}`).catch(() => []),
           fetchJson('v_run_candidate_summary', `run_id=${encodeURIComponent(runId)}`).catch(() => []),
           fetchJson('reports', `run_id=${encodeURIComponent(runId)}`).catch(() => []),
-          fetchJson('run_events', `run_id=${encodeURIComponent(runId)}&limit=100`).catch(() => []),
+          fetchJson('run_events', `run_id=${encodeURIComponent(runId)}`).catch(() => []),
           fetchJson('research_runs', `id=${encodeURIComponent(runId)}`).catch(() => [state.currentRun]),
         ]);
         state.currentRun = Array.isArray(freshRun) && freshRun[0] ? freshRun[0] : state.currentRun;

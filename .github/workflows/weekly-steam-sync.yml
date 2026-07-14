@@ -1,0 +1,74 @@
+name: Weekly Steam Data Sync
+
+on:
+  schedule:
+    - cron: '0 10 * * 0'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Sync mode
+        required: true
+        default: weekly
+        type: choice
+        options:
+          - weekly
+          - catalog
+          - details
+          - retry-failures
+      detail_limit:
+        description: Maximum detail records
+        required: false
+        default: '500'
+
+concurrency:
+  group: weekly-steam-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      STEAM_API_KEY: ${{ secrets.STEAM_API_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+
+      - name: Validate required secrets
+        run: |
+          if [ -z "$STEAM_API_KEY" ]; then echo "STEAM_API_KEY is required" >&2; exit 1; fi
+          if [ -z "$SUPABASE_URL" ]; then echo "SUPABASE_URL is required" >&2; exit 1; fi
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then echo "SUPABASE_SERVICE_ROLE_KEY is required" >&2; exit 1; fi
+
+      - name: Validate Python files
+        run: python -m compileall supabase sync-steam-cache.py
+
+      - name: Run Steam sync
+        run: |
+          python sync-steam-cache.py ${{ github.event.inputs.mode }} --limit ${{ github.event.inputs.detail_limit }}
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: steam-sync-logs
+          path: logs/steam_sync/**
+          if-no-files-found: ignore
