@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,15 @@ class SupabaseClient:
             'Authorization': f'Bearer {self.key}',
             'Content-Type': 'application/json',
         }
+        self._thread_local = threading.local()
+
+    def _session(self) -> requests.Session:
+        session = getattr(self._thread_local, 'session', None)
+        if session is None:
+            session = requests.Session()
+            session.headers.update(self.headers)
+            self._thread_local.session = session
+        return session
 
     def _url(self, path: str) -> str:
         path = path.lstrip('/')
@@ -44,7 +54,7 @@ class SupabaseClient:
         raw_response: bool = False,
     ) -> Any:
         request_headers = {**self.headers, **(headers or {})}
-        response = requests.request(
+        response = self._session().request(
             method,
             self._url(path),
             params=params,

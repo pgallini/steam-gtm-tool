@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from typing import Any
 
@@ -18,6 +20,16 @@ from .pipeline_logging import log_step, log_step_event
 client = SupabaseClient()
 
 APP_REVIEWS_URL = 'https://store.steampowered.com/appreviews/{appid}'
+_review_session_local = threading.local()
+
+
+def review_session() -> requests.Session:
+    session = getattr(_review_session_local, 'session', None)
+    if session is None:
+        session = requests.Session()
+        session.headers.update({'User-Agent': 'steam-gtm-research-prototype/0.1'})
+        _review_session_local.session = session
+    return session
 
 
 REVIEW_INSIGHT_SCHEMA = {
@@ -101,7 +113,7 @@ def one(table: str, filters: dict[str, str], select: str = '*') -> dict[str, Any
 
 
 def fetch_reviews_page(appid: int, *, review_type: str, cursor: str = '*', language: str = 'english', num_per_page: int = 20) -> dict[str, Any]:
-    response = requests.get(
+    response = review_session().get(
         APP_REVIEWS_URL.format(appid=appid),
         params={
             'json': 1,
@@ -112,7 +124,6 @@ def fetch_reviews_page(appid: int, *, review_type: str, cursor: str = '*', langu
             'num_per_page': num_per_page,
             'cursor': cursor,
         },
-        headers={'User-Agent': 'steam-gtm-research-prototype/0.1'},
         timeout=45,
     )
     response.raise_for_status()
@@ -141,14 +152,24 @@ def normalize_review(appid: int, review_type: str, raw: dict[str, Any]) -> dict[
     }
 
 
-def upsert_review(payload: dict[str, Any]) -> None:
-    review_id = payload.get('steam_review_id')
-    if review_id:
-        existing = one('steam_reviews', {'steam_review_id': f'eq.{review_id}'})
-        if existing:
-            client.update('steam_reviews', {'id': f"eq.{existing['id']}"}, payload, returning='minimal')
-            return
-    client.insert('steam_reviews', payload, returning='minimal')
+def upsert_reviews(payloads: list[dict[str, Any]]) -> int:
+    if not payloads:
+        return 0
+
+    identified = [payload for payload in payloads if payload.get('steam_review_id')]
+    unidentified = [payload for payload in payloads if not payload.get('steam_review_id')]
+
+    if identified:
+        client.upsert_batches(
+            'steam_reviews',
+            identified,
+            on_conflict='steam_review_id',
+            batch_size=500,
+            returning='minimal',
+        )
+    if unidentified:
+        client.insert('steam_reviews', unidentified, returning='minimal')
+    return len(payloads)
 
 
 def collect_reviews_for_candidate(candidate: dict[str, Any], *, max_pages: int, language: str, num_per_page: int, candidate_index: int | None = None, total_candidates: int | None = None) -> dict[str, Any]:
@@ -196,9 +217,8 @@ def collect_reviews_for_candidate(candidate: dict[str, Any], *, max_pages: int, 
                 reviews = data.get('reviews') or []
                 if not reviews:
                     break
-                for raw in reviews:
-                    upsert_review(normalize_review(appid, review_type, raw))
-                    counts[review_type] += 1
+                normalized_reviews = [normalize_review(appid, review_type, raw) for raw in reviews]
+                counts[review_type] += upsert_reviews(normalized_reviews)
                 next_cursor = data.get('cursor')
                 if not next_cursor or next_cursor == cursor:
                     break
@@ -322,14 +342,21 @@ Be concise and specific.
     return json.loads(response.output_text)
 
 
+def load_candidate_reviews(appid: int, limit_per_sentiment: int = 80) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    common_filters = {'steam_appid': f'eq.{appid}', 'order': 'fetched_at.desc', 'limit': str(limit_per_sentiment)}
+    positive_rows = client.select('steam_reviews', '*', {**common_filters, 'voted_up': 'eq.true'})
+    negative_rows = client.select('steam_reviews', '*', {**common_filters, 'voted_up': 'eq.false'})
+    return positive_rows, negative_rows
+
+
 def build_candidate_insight(candidate: dict[str, Any]) -> dict[str, Any] | None:
     appid = as_int(candidate.get('steam_appid'))
     if not appid:
         return None
     log_step_event('10_summarize_tier1_reviews', 'started', run_id=candidate['run_id'], message='Started candidate review summarization', candidate_id=candidate['id'], appid=appid)
-    reviews = client.select('steam_reviews', '*', {'steam_appid': f'eq.{appid}', 'order': 'fetched_at.desc', 'limit': '80'})
-    positive_rows = sorted([r for r in reviews if r.get('voted_up') is True and r.get('review_text')], key=review_quality_score, reverse=True)
-    negative_rows = sorted([r for r in reviews if r.get('voted_up') is False and r.get('review_text')], key=review_quality_score, reverse=True)
+    positive_reviews, negative_reviews = load_candidate_reviews(appid)
+    positive_rows = sorted([r for r in positive_reviews if r.get('review_text')], key=review_quality_score, reverse=True)
+    negative_rows = sorted([r for r in negative_reviews if r.get('review_text')], key=review_quality_score, reverse=True)
     positives = [r.get('review_text') or '' for r in positive_rows]
     negatives = [r.get('review_text') or '' for r in negative_rows]
     if not positives and not negatives:
@@ -658,6 +685,8 @@ def runReviewPipeline(run_id: str) -> dict[str, Any]:
     candidate_limit = as_int(config.get('review_candidate_limit'), 50)
     language = config.get('review_language', 'english')
     num_per_page = as_int(config.get('review_num_per_page'), 100)
+    collection_workers = max(1, as_int(config.get('review_collection_workers'), 4))
+    analysis_workers = max(1, as_int(config.get('review_analysis_workers'), 4))
 
     updateResearchRunStatus(run_id, 'running', current_stage='review_collection')
     addRunEvent(run_id, 'review_collection', 'stage_started', 'Review collection started', {'candidate_limit': candidate_limit, 'max_pages': max_pages})
@@ -671,35 +700,41 @@ def runReviewPipeline(run_id: str) -> dict[str, Any]:
     tier1_candidates = [candidate for candidate in selected_candidates if str(candidate.get('id')) in tier1_ids]
     candidates = (tier1_candidates or selected_candidates)[:candidate_limit]
     collection_results = []
-    for index, candidate in enumerate(candidates, start=1):
-        collection_result: dict[str, Any] | None = None
-        try:
-            collection_result = collect_reviews_for_candidate(
+    with ThreadPoolExecutor(max_workers=min(collection_workers, max(1, len(candidates)))) as executor:
+        futures = {
+            executor.submit(
+                collect_reviews_for_candidate,
                 candidate,
                 max_pages=max_pages,
                 language=language,
                 num_per_page=num_per_page,
                 candidate_index=index,
                 total_candidates=len(candidates),
+            ): candidate
+            for index, candidate in enumerate(candidates, start=1)
+        }
+        for completed, future in enumerate(as_completed(futures), start=1):
+            candidate = futures[future]
+            collection_result: dict[str, Any] | None = None
+            try:
+                collection_result = future.result()
+                collection_results.append(collection_result)
+            except Exception as exc:
+                addRunEvent(run_id, 'review_collection', 'candidate_review_collection_failed', f"Failed to collect reviews for {candidate.get('title')}", {'error': str(exc)})
+            addRunProgressEvent(
+                run_id,
+                'review_collection',
+                completed,
+                len(candidates),
+                unit='games',
+                message='Collecting Tier 1 reviews',
+                details={
+                    'candidate_id': candidate.get('id'),
+                    'title': candidate.get('title'),
+                    'total_candidates': len(candidates),
+                    'review_count': collection_result.get('total') if collection_result else None,
+                },
             )
-            collection_results.append(collection_result)
-        except Exception as exc:
-            addRunEvent(run_id, 'review_collection', 'candidate_review_collection_failed', f"Failed to collect reviews for {candidate.get('title')}", {'error': str(exc)})
-        addRunProgressEvent(
-            run_id,
-            'review_collection',
-            index,
-            len(candidates),
-            unit='games',
-            message='Collecting Tier 1 reviews',
-            details={
-                'candidate_id': candidate.get('id'),
-                'title': candidate.get('title'),
-                'candidate_index': index,
-                'total_candidates': len(candidates),
-                'review_count': collection_result.get('total') if collection_result else None,
-            },
-        )
 
     addRunEvent(run_id, 'review_collection', 'stage_completed', 'Review collection completed', {'collections': collection_results, 'processed_count': len(candidates), 'unit': 'games'})
     log_step_event('09_fetch_tier1_reviews', 'completed', run_id=run_id, message='Completed Tier 1 review collection stage', collections=len(collection_results))
@@ -708,19 +743,24 @@ def runReviewPipeline(run_id: str) -> dict[str, Any]:
     addRunEvent(run_id, 'review_analysis', 'stage_started', 'Review insight analysis started')
     log_step_event('10_summarize_tier1_reviews', 'started', run_id=run_id, message='Started Tier 1 review summarization stage')
     insight_count = 0
-    for index, candidate in enumerate(candidates, start=1):
-        insight = build_candidate_insight(candidate)
-        if insight:
-            insight_count += 1
-        addRunProgressEvent(
-            run_id,
-            'review_analysis',
-            index,
-            len(candidates),
-            unit='games',
-            message='Summarizing Tier 1 reviews',
-            details={'candidate_id': candidate.get('id'), 'title': candidate.get('title'), 'insight_count': insight_count},
-        )
+    with ThreadPoolExecutor(max_workers=min(analysis_workers, max(1, len(candidates)))) as executor:
+        futures = {executor.submit(build_candidate_insight, candidate): candidate for candidate in candidates}
+        for completed, future in enumerate(as_completed(futures), start=1):
+            candidate = futures[future]
+            try:
+                if future.result():
+                    insight_count += 1
+            except Exception as exc:
+                addRunEvent(run_id, 'review_analysis', 'candidate_review_analysis_failed', f"Failed to summarize reviews for {candidate.get('title')}", {'error': str(exc)})
+            addRunProgressEvent(
+                run_id,
+                'review_analysis',
+                completed,
+                len(candidates),
+                unit='games',
+                message='Summarizing Tier 1 reviews',
+                details={'candidate_id': candidate.get('id'), 'title': candidate.get('title'), 'insight_count': insight_count},
+            )
 
     rollup = rollup_review_insights(run_id)
     report = generate_review_report(run_id, rollup)
