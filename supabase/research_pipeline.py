@@ -6,7 +6,7 @@ import math
 import os
 import re
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import requests
@@ -150,8 +150,35 @@ def as_bool(value: Any, default: bool = False) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {'1', 'true', 'yes', 'y', 'on'}
     return bool(value)
-
-
+ 
+ 
+def parse_iso_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+ 
+ 
+def is_cached_steam_app_fresh(app: dict[str, Any], *, country: str, language: str, stale_after_days: int = 7) -> bool:
+    if not app:
+        return False
+    if app.get('fetch_status') != 'enriched':
+        return False
+    if str(app.get('country_code', '')).lower() != country.lower():
+        return False
+    if str(app.get('language_code', '')).lower() != language.lower():
+        return False
+    last_fetched = app.get('last_successfully_fetched_at') or app.get('last_fetched_at')
+    if not last_fetched:
+        return False
+    fetched_at = parse_iso_timestamp(last_fetched)
+    if not fetched_at:
+        return False
+    return datetime.now(UTC) - fetched_at <= timedelta(days=stale_after_days)
+ 
+ 
 def text_list(items: Any, key: str = 'description') -> list[str]:
     if not isinstance(items, list):
         return []
@@ -175,7 +202,7 @@ def normalize_release_status(detail: dict[str, Any]) -> str | None:
     return None
 
 
-def steam_app_payload(appid: int, detail: dict[str, Any], page_signals: dict[str, Any]) -> dict[str, Any]:
+def steam_app_payload(appid: int, detail: dict[str, Any], page_signals: dict[str, Any], *, country: str, language: str) -> dict[str, Any]:
     price = detail.get('price_overview') or {}
     release = detail.get('release_date') or {}
     recommendations = detail.get('recommendations') or {}
@@ -187,6 +214,7 @@ def steam_app_payload(appid: int, detail: dict[str, Any], page_signals: dict[str
     tag_names = [str(tag.get('name')) for tag in tags if isinstance(tag, dict) and tag.get('name')]
     tag_ids = [int(tag.get('tagid')) for tag in tags if isinstance(tag, dict) and str(tag.get('tagid') or '').isdigit()]
 
+    platforms = detail.get('platforms') or {}
     return {
         'appid': appid,
         'name': name,
@@ -198,6 +226,7 @@ def steam_app_payload(appid: int, detail: dict[str, Any], page_signals: dict[str
         'is_free': detail.get('is_free'),
         'price_initial_cents': price.get('initial') if isinstance(price, dict) else None,
         'price_final_cents': price.get('final') if isinstance(price, dict) else None,
+        'discount_percent': price.get('discount_percent') if isinstance(price, dict) else None,
         'currency': price.get('currency') if isinstance(price, dict) else None,
         'review_summary': basic.get('review_summary'),
         'recent_review_summary': basic.get('recent_review_summary'),
@@ -209,6 +238,15 @@ def steam_app_payload(appid: int, detail: dict[str, Any], page_signals: dict[str
         'tags': tag_names,
         'tag_ids': tag_ids,
         'last_fetched_at': utc_now_iso(),
+        'last_successfully_fetched_at': utc_now_iso(),
+        'fetch_status': 'enriched',
+        'is_available': bool(detail.get('success')),
+        'header_image_url': detail.get('header_image'),
+        'supports_windows': bool(platforms.get('windows')),
+        'supports_mac': bool(platforms.get('mac')),
+        'supports_linux': bool(platforms.get('linux')),
+        'country_code': country,
+        'language_code': language,
         'raw_appdetails_json': detail,
         'raw_page_signals_json': page_signals,
     }
@@ -235,15 +273,45 @@ def snapshot_payload(app_payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def upsert_enriched_steam_app(appid: int, *, country: str = 'us', language: str = 'english', run_id: str | None = None) -> dict[str, Any]:
+    existing = one('steam_apps', {'appid': f'eq.{appid}'}) or {}
+    if is_cached_steam_app_fresh(existing, country=country, language=language):
+        last_timestamp = existing.get('last_successfully_fetched_at') or existing.get('last_fetched_at')
+        parsed_timestamp = parse_iso_timestamp(last_timestamp)
+        cache_age_days = (datetime.now(UTC) - parsed_timestamp).days if parsed_timestamp else None
+        log_step(
+            'steam_cache',
+            run_id=run_id,
+            message='Using fresh cached Steam app details',
+            appid=appid,
+            data_source='cache',
+            last_successfully_fetched_at=existing.get('last_successfully_fetched_at'),
+            cache_age_days=cache_age_days,
+        )
+        return existing
+ 
     raw_detail = fetch_app_details(appid, country=country, language=language, run_id=run_id)
     detail = normalize_app_details(appid, raw_detail)
+    if not detail.get('success') and existing:
+        last_timestamp = existing.get('last_successfully_fetched_at') or existing.get('last_fetched_at')
+        parsed_timestamp = parse_iso_timestamp(last_timestamp)
+        cache_age_days = (datetime.now(UTC) - parsed_timestamp).days if parsed_timestamp else None
+        log_step(
+            'steam_cache',
+            run_id=run_id,
+            message='Falling back to stale cached Steam app details after live fetch failed',
+            appid=appid,
+            data_source='stale_cache_fallback',
+            last_successfully_fetched_at=existing.get('last_successfully_fetched_at'),
+            cache_age_days=cache_age_days,
+        )
+        return existing
+ 
     try:
         page_signals = fetch_page_signals(appid, country=country, language=language, run_id=run_id)
     except Exception as exc:
-        existing = one('steam_apps', {'appid': f'eq.{appid}'}) or {}
         page_signals = existing.get('raw_page_signals_json') or {'appid': appid, 'error': str(exc), 'tags': [], 'basic_info': {}}
-
-    payload = steam_app_payload(appid, detail, page_signals)
+ 
+    payload = steam_app_payload(appid, detail, page_signals, country=country, language=language)
     response = client.insert('steam_apps', payload, upsert=True, on_conflict='appid', returning='representation')
     app = response[0] if isinstance(response, list) else response
     client.insert('steam_app_snapshots', snapshot_payload(payload), returning='minimal')
@@ -359,62 +427,79 @@ def tag_id_for_name(seed_tags: list[dict[str, Any]], tag_name: str) -> int | Non
     return None
 
 
-def search_steam_by_tag_ids(tag_ids: list[int], *, max_results: int) -> list[dict[str, Any]]:
-    response = requests.get(
-        'https://store.steampowered.com/search/',
-        params={'tags': ','.join(str(tag_id) for tag_id in tag_ids), 'ndl': '1'},
-        headers={'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US,en;q=0.9'},
-        timeout=30,
+def _format_supabase_array_contains(values: list[Any]) -> str:
+    cleaned = [str(value) for value in values if value is not None]
+    return '{' + ','.join(cleaned) + '}' if cleaned else '{}'
+
+
+def _search_cached_steam_by_tag_ids(tag_ids: list[int], *, max_results: int) -> list[dict[str, Any]]:
+    """Search the local steam_apps catalog for matches by Steam tag IDs."""
+    cleaned_ids = [int(tag_id) for tag_id in tag_ids if isinstance(tag_id, int) and tag_id > 0]
+    if not cleaned_ids:
+        return []
+    filters = {
+        'tag_ids': f'cs.{_format_supabase_array_contains(cleaned_ids)}',
+        'or': '(app_type.eq.game,app_type.is.null)',
+        'order': 'review_count.desc.nullslast,appid.asc',
+        'limit': str(max_results),
+    }
+    rows = client.select('steam_apps', 'appid,name,steam_url', filters)
+    return [
+        {
+            'appid': as_int(row.get('appid')),
+            'title': row.get('name'),
+            'source_url': row.get('steam_url'),
+        }
+        for row in rows
+        if row.get('appid')
+    ]
+
+
+def _search_cached_steam_by_text(query: str, *, max_results: int) -> list[dict[str, Any]]:
+    """Search the local steam_apps catalog by name and tags using cached data only."""
+    query_text = (query or '').strip()
+    if not query_text:
+        return []
+    escaped = query_text.replace(')', '').replace('(', '').replace('{', '').replace('}', '').replace(',', ' ').replace('"', '').replace("'", '')
+    name_rows = client.select(
+        'steam_apps',
+        'appid,name,steam_url',
+        {
+            'name': f'ilike.*{escaped}*',
+            'or': '(app_type.eq.game,app_type.is.null)',
+            'order': 'review_count.desc.nullslast,appid.asc',
+            'limit': str(max_results),
+        },
     )
-    response.raise_for_status()
-    soup = BeautifulSoup(response.text, 'html.parser')
-    results: list[dict[str, Any]] = []
-    for row in soup.select('a.search_result_row'):
-        appid_raw = row.get('data-ds-appid')
-        if not appid_raw:
-            match = re.search(r'/app/(\d+)', row.get('href', ''))
-            appid_raw = match.group(1) if match else None
-        if not appid_raw:
+    tag_rows = client.select(
+        'steam_apps',
+        'appid,name,steam_url',
+        {
+            'tags': f'cs.{{{escaped}}}',
+            'or': '(app_type.eq.game,app_type.is.null)',
+            'order': 'review_count.desc.nullslast,appid.asc',
+            'limit': str(max_results),
+        },
+    )
+    combined: dict[int, dict[str, Any]] = {}
+    for row in name_rows + tag_rows:
+        appid = as_int(row.get('appid'))
+        if not appid:
             continue
-        title_el = row.select_one('.title')
-        results.append(
-            {
-                'appid': as_int(appid_raw),
-                'title': title_el.get_text(strip=True) if title_el else None,
-                'source_url': response.url,
-            }
-        )
-        if len(results) >= max_results:
-            break
-    return results
+        combined[appid] = {
+            'appid': appid,
+            'title': row.get('name'),
+            'source_url': row.get('steam_url'),
+        }
+    return list(combined.values())[:max_results]
+
+
+def search_steam_by_tag_ids(tag_ids: list[int], *, max_results: int) -> list[dict[str, Any]]:
+    return _search_cached_steam_by_tag_ids(tag_ids, max_results=max_results)
 
 
 def search_steam_text(query: str, *, max_results: int, country: str, language: str) -> list[dict[str, Any]]:
-    response = requests.get(
-        'https://store.steampowered.com/search/results/',
-        params={'term': query, 'cc': country, 'l': language},
-        headers={'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US,en;q=0.9'},
-        timeout=30,
-    )
-    response.raise_for_status()
-    try:
-        payload = response.json()
-    except Exception:
-        return []
-    soup = BeautifulSoup(payload.get('results_html') or '', 'html.parser')
-    results: list[dict[str, Any]] = []
-    for row in soup.select('a.search_result_row'):
-        appid_raw = row.get('data-ds-appid')
-        if not appid_raw:
-            match = re.search(r'/app/(\d+)', row.get('href', ''))
-            appid_raw = match.group(1) if match else None
-        if not appid_raw:
-            continue
-        title_el = row.select_one('.title')
-        results.append({'appid': as_int(appid_raw), 'title': title_el.get_text(strip=True) if title_el else None, 'source_url': row.get('href')})
-        if len(results) >= max_results:
-            break
-    return results
+    return _search_cached_steam_by_text(query, max_results=max_results)
 
 
 def tag_id_for_name(seed_tags: list[dict[str, Any]], tag_name: str) -> int | None:
@@ -424,62 +509,6 @@ def tag_id_for_name(seed_tags: list[dict[str, Any]], tag_name: str) -> int | Non
     return None
 
 
-def search_steam_by_tag_ids(tag_ids: list[int], *, max_results: int) -> list[dict[str, Any]]:
-    response = requests.get(
-        'https://store.steampowered.com/search/',
-        params={'tags': ','.join(str(tag_id) for tag_id in tag_ids), 'ndl': '1'},
-        headers={'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US,en;q=0.9'},
-        timeout=30,
-    )
-    response.raise_for_status()
-    soup = BeautifulSoup(response.text, 'html.parser')
-    results: list[dict[str, Any]] = []
-    for row in soup.select('a.search_result_row'):
-        appid_raw = row.get('data-ds-appid')
-        if not appid_raw:
-            match = re.search(r'/app/(\d+)', row.get('href', ''))
-            appid_raw = match.group(1) if match else None
-        if not appid_raw:
-            continue
-        title_el = row.select_one('.title')
-        results.append(
-            {
-                'appid': as_int(appid_raw),
-                'title': title_el.get_text(strip=True) if title_el else None,
-                'source_url': response.url,
-            }
-        )
-        if len(results) >= max_results:
-            break
-    return results
-
-
-def search_steam_text(query: str, *, max_results: int, country: str, language: str) -> list[dict[str, Any]]:
-    response = requests.get(
-        'https://store.steampowered.com/search/results/',
-        params={'term': query, 'cc': country, 'l': language},
-        headers={'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US,en;q=0.9'},
-        timeout=30,
-    )
-    response.raise_for_status()
-    try:
-        payload = response.json()
-    except Exception:
-        return []
-    soup = BeautifulSoup(payload.get('results_html') or '', 'html.parser')
-    results: list[dict[str, Any]] = []
-    for row in soup.select('a.search_result_row'):
-        appid_raw = row.get('data-ds-appid')
-        if not appid_raw:
-            match = re.search(r'/app/(\d+)', row.get('href', ''))
-            appid_raw = match.group(1) if match else None
-        if not appid_raw:
-            continue
-        title_el = row.select_one('.title')
-        results.append({'appid': as_int(appid_raw), 'title': title_el.get_text(strip=True) if title_el else None, 'source_url': row.get('href')})
-        if len(results) >= max_results:
-            break
-    return results
 
 
 def get_run_and_game(run_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -636,196 +665,6 @@ def extract_more_like_this_appids(soup: BeautifulSoup) -> list[int]:
             if isinstance(appid, int):
                 appids.append(appid)
     return appids
-
-
-def search_steam_by_tag_ids(tag_ids: list[int], *, max_results: int) -> list[dict[str, Any]]:
-    response = requests.get(
-        'https://store.steampowered.com/search/',
-        params={'tags': ','.join(str(tag_id) for tag_id in tag_ids), 'ndl': '1'},
-        headers={'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US,en;q=0.9'},
-        timeout=30,
-    )
-    response.raise_for_status()
-    soup = BeautifulSoup(response.text, 'html.parser')
-    results: list[dict[str, Any]] = []
-    for row in soup.select('a.search_result_row'):
-        appid_raw = row.get('data-ds-appid')
-        if not appid_raw:
-            match = re.search(r'/app/(\d+)', row.get('href', ''))
-            appid_raw = match.group(1) if match else None
-        if not appid_raw:
-            continue
-        title_el = row.select_one('.title')
-        results.append(
-            {
-                'appid': as_int(appid_raw),
-                'title': title_el.get_text(strip=True) if title_el else None,
-                'source_url': response.url,
-            }
-        )
-        if len(results) >= max_results:
-            break
-    return results
-
-
-def search_steam_text(query: str, *, max_results: int, country: str, language: str) -> list[dict[str, Any]]:
-    response = requests.get(
-        'https://store.steampowered.com/search/results/',
-        params={'term': query, 'cc': country, 'l': language},
-        headers={'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US,en;q=0.9'},
-        timeout=30,
-    )
-    response.raise_for_status()
-    try:
-        payload = response.json()
-    except Exception:
-        return []
-    soup = BeautifulSoup(payload.get('results_html') or '', 'html.parser')
-    results: list[dict[str, Any]] = []
-    for row in soup.select('a.search_result_row'):
-        appid_raw = row.get('data-ds-appid')
-        if not appid_raw:
-            match = re.search(r'/app/(\d+)', row.get('href', ''))
-            appid_raw = match.group(1) if match else None
-        if not appid_raw:
-            continue
-        title_el = row.select_one('.title')
-        results.append({'appid': as_int(appid_raw), 'title': title_el.get_text(strip=True) if title_el else None, 'source_url': row.get('href')})
-        if len(results) >= max_results:
-            break
-    return results
-
-
-def get_run_and_game(run_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
-    run = one('research_runs', {'id': f'eq.{run_id}'})
-    if not run:
-        raise ValueError(f'Research run {run_id} not found')
-    game = one('games', {'id': f"eq.{run['game_id']}"})
-    if not game:
-        raise ValueError(f"Game {run['game_id']} for run {run_id} not found")
-    return run, game
-
-
-def existing_candidate_by_appid(run_id: str, appid: int) -> dict[str, Any] | None:
-    return one('run_candidates', {'run_id': f'eq.{run_id}', 'steam_appid': f'eq.{appid}'})
-
-
-def add_discovered_candidate(run: dict[str, Any], appid: int, rank: int, source_payload: dict[str, Any]) -> dict[str, Any] | None:
-    existing = existing_candidate_by_appid(run['id'], appid)
-    app = one('steam_apps', {'appid': f'eq.{appid}'}) or {'name': f'Steam App {appid}'}
-    source = source_payload.get('candidate_source') or 'steam_more_like_this'
-    if existing:
-        candidate = existing
-    else:
-        payload = {
-            'run_id': run['id'],
-            'organization_id': run['organization_id'],
-            'steam_appid': appid,
-            'title': app.get('name') or f'Steam App {appid}',
-            'steam_url': canonical_steam_url(appid),
-            'primary_source': source,
-            'pipeline_status': 'discovered',
-            'discovery_rank': rank,
-            'raw_candidate_json': source_payload,
-        }
-        response = client.insert('run_candidates', payload, returning='representation')
-        candidate = response[0] if isinstance(response, list) else response
-
-    if candidate:
-        log_step('02_discover_candidates', run_id=run['id'], message='Added discovered candidate', appid=appid, source=source, rank=rank, title=candidate.get('title'))
-        evidence = {
-            'candidate_id': candidate['id'],
-            'run_id': run['id'],
-            'source': source,
-            'query': source_payload.get('query') or ', '.join(source_payload.get('tags') or []) or f"seed:{source_payload.get('seed_appid')}",
-            'source_rank': rank,
-            'source_score': None,
-            'evidence_notes': source_payload.get('evidence_notes') or 'Discovered by automated Steam candidate discovery.',
-            'raw_evidence_json': source_payload,
-        }
-        client.insert('candidate_discovery_evidence', evidence, returning='minimal')
-    return candidate
-
-
-def add_tag_discovery_results(
-    run: dict[str, Any],
-    *,
-    seed_tags: list[dict[str, Any]],
-    tag_names: list[str],
-    rank_offset: int,
-    max_results: int,
-    source: str,
-    country: str,
-    language: str,
-) -> int:
-    tag_ids: list[int] = []
-    for tag_name in tag_names:
-        tag_id = tag_id_for_name(seed_tags, tag_name)
-        if tag_id is None:
-            addRunEvent(run['id'], 'discovery', 'tag_id_missing', f'No Steam tag ID found for {tag_name}', {'tag': tag_name})
-            return 0
-        tag_ids.append(tag_id)
-
-    added = 0
-    for rank, result in enumerate(search_steam_by_tag_ids(tag_ids, max_results=max_results), start=rank_offset):
-        appid = as_int(result.get('appid'))
-        if not appid:
-            continue
-        try:
-            upsert_enriched_steam_app(appid, country=country, language=language)
-            add_discovered_candidate(
-                run,
-                appid,
-                rank,
-                {
-                    'candidate_source': source,
-                    'source_method': 'steam_tag_id_search',
-                    'tags': tag_names,
-                    'tag_ids': tag_ids,
-                    'source_url': result.get('source_url'),
-                    'title': result.get('title'),
-                    'evidence_notes': 'Discovered from Steam tag ID search.',
-                },
-            )
-            added += 1
-        except Exception as exc:
-            addRunEvent(run['id'], 'discovery', 'tag_candidate_failed', f'Failed to add tag-discovered app {appid}', {'error': str(exc), 'tags': tag_names})
-    return added
-
-
-def add_text_discovery_results(
-    run: dict[str, Any],
-    *,
-    query: str,
-    rank_offset: int,
-    max_results: int,
-    country: str,
-    language: str,
-) -> int:
-    added = 0
-    for rank, result in enumerate(search_steam_text(query, max_results=max_results, country=country, language=language), start=rank_offset):
-        appid = as_int(result.get('appid'))
-        if not appid:
-            continue
-        try:
-            upsert_enriched_steam_app(appid, country=country, language=language)
-            add_discovered_candidate(
-                run,
-                appid,
-                rank,
-                {
-                    'candidate_source': 'tag_search',
-                    'source_method': 'steam_text_search',
-                    'query': query,
-                    'source_url': result.get('source_url'),
-                    'title': result.get('title'),
-                    'evidence_notes': 'Discovered from Steam text search generated by the discovery strategy.',
-                },
-            )
-            added += 1
-        except Exception as exc:
-            addRunEvent(run['id'], 'discovery', 'text_search_candidate_failed', f'Failed to add text-search app {appid}', {'error': str(exc), 'query': query})
-    return added
 
 
 def enrich_run(run_id: str) -> dict[str, Any]:
