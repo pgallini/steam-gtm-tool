@@ -256,6 +256,57 @@
     details.advanced summary { cursor: pointer; font-weight: 700; }
     .hidden { display: none !important; }
     .small { font-size: 12px; }
+    .workspace-layout { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: calc(100vh - 133px); }
+    body.workspace-open .app-masthead { display: none; }
+    body.workspace-open .page-shell { max-width: none; padding: 0; }
+    .workspace-sidebar { position: sticky; top: 0; height: 100vh; padding: 24px 14px; border-right: 1px solid var(--border); background: var(--card); z-index: 4; }
+    .workspace-sidebar-title { padding: 0 12px 14px; color: var(--subtle); font-size: 11px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+    .workspace-nav { display: grid; gap: 4px; }
+    .workspace-nav button { width: 100%; justify-content: flex-start; min-height: 42px; padding: 0 11px; border: 0; border-radius: 9px; color: var(--muted); background: transparent; }
+    .workspace-nav button:hover { color: var(--text); background: var(--muted-surface); }
+    .workspace-nav button.active { color: var(--primary-dark); background: var(--primary-soft); }
+    .nav-icon { width: 20px; text-align: center; font-size: 15px; }
+    .nav-label { flex: 1; text-align: left; }
+    .nav-state { font-size: 12px; color: var(--subtle); }
+    .nav-state.completed { color: var(--success); }
+    .workspace-content { min-width: 0; }
+    .workspace-topbar { position: sticky; top: 0; z-index: 3; background: rgba(255,255,255,.96); border-bottom: 1px solid var(--border); backdrop-filter: blur(10px); }
+    .workspace-heading { padding: 18px 28px 14px; }
+    .breadcrumb { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+    .breadcrumb button { min-height: 0; padding: 0; border: 0; color: var(--primary); background: transparent; font-size: 12px; }
+    .run-heading-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+    .run-heading-row h1 { font-size: 25px; margin: 0; }
+    .run-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 7px; color: var(--muted); font-size: 12px; }
+    .recommended-action { display: flex; align-items: center; gap: 12px; }
+    .recommended-copy { text-align: right; }
+    .recommended-copy span { display: block; color: var(--subtle); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .recommended-copy strong { display: block; margin-top: 2px; font-size: 13px; }
+    .compact-progress { display: flex; gap: 0; padding: 0 28px 12px; overflow-x: auto; }
+    .compact-progress .step { min-width: 130px; padding: 7px 12px; border: 0; border-radius: 0; border-top: 2px solid var(--border); background: transparent; box-shadow: none; }
+    .compact-progress .step strong { font-size: 11px; white-space: nowrap; }
+    .compact-progress .step span { display: none; }
+    .compact-progress .step.completed { color: var(--success); border-color: var(--success); }
+    .compact-progress .step.active { color: var(--primary); border-color: var(--primary); background: transparent; }
+    .workspace-page { display: none; padding: 24px 28px 44px; }
+    .workspace-page.active { display: block; }
+    .page-intro { margin-bottom: 18px; }
+    .page-intro h2 { margin-bottom: 3px; }
+    .overview-stats { display: grid; grid-template-columns: repeat(6, minmax(110px,1fr)); gap: 10px; }
+    .overview-grid { display: grid; grid-template-columns: minmax(0,1.25fr) minmax(280px,.75fr); gap: 16px; margin-top: 16px; }
+    .activity-list, .report-list-compact { list-style: none; padding: 0; margin: 12px 0 0; }
+    .activity-list li, .report-list-compact li { padding: 10px 0; border-top: 1px solid var(--border); }
+    .review-page { padding: 18px 20px 30px; }
+    .review-toolbar { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-bottom: 10px; }
+    .review-toolbar label { margin: 0; min-width: 145px; }
+    .review-toolbar .search-control { flex: 1; min-width: 240px; }
+    .review-page .table-wrap { max-height: calc(100vh - 340px); border-radius: 10px; }
+    .candidate-row-selected { background: #FAF7FE; box-shadow: inset 3px 0 var(--primary); }
+    .candidate-drawer { position: fixed; inset: 0 0 0 auto; width: min(520px, 92vw); z-index: 20; padding: 22px; overflow: auto; background: var(--card); border-left: 1px solid var(--border); box-shadow: -16px 0 40px rgba(23,32,51,.16); transform: translateX(102%); transition: transform 180ms ease; }
+    .candidate-drawer.open { transform: translateX(0); }
+    .drawer-backdrop { position: fixed; inset: 0; z-index: 19; background: rgba(23,32,51,.28); display: none; }
+    .drawer-backdrop.open { display: block; }
+    .candidate-drawer .candidate-detail-layout { grid-template-columns: 1fr; }
+    .mobile-nav-toggle { display: none; }
     @media (max-width: 800px) {
       main, .page-shell { padding: 20px 16px 36px; }
       .app-masthead { padding: 22px 16px; flex-direction: column; align-items: flex-start; }
@@ -269,9 +320,27 @@
       .two-col, .three-col, .stepper { grid-template-columns: 1fr; }
       .loaded-run-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .candidate-detail-layout { grid-template-columns: 1fr; }
+      .workspace-layout { grid-template-columns: 76px minmax(0, 1fr); }
+      .workspace-sidebar { padding-inline: 9px; }
+      .workspace-sidebar-title, .nav-label, .nav-state { display: none; }
+      .workspace-nav button { justify-content: center; }
+      .overview-stats { grid-template-columns: repeat(3, minmax(0,1fr)); }
     }
     @media (max-width: 560px) {
       .loaded-run-stats { grid-template-columns: 1fr; }
+      .workspace-layout { display: block; }
+      .workspace-sidebar { display: none; position: fixed; width: 250px; }
+      .workspace-sidebar.open { display: block; }
+      .workspace-sidebar-title, .nav-label, .nav-state { display: block; }
+      .workspace-nav button { justify-content: flex-start; }
+      .mobile-nav-toggle { display: inline-flex; }
+      .workspace-heading, .workspace-page { padding-left: 16px; padding-right: 16px; }
+      .compact-progress { padding-left: 16px; padding-right: 16px; }
+      .run-heading-row { display: block; }
+      .recommended-action { margin-top: 14px; justify-content: space-between; }
+      .recommended-copy { text-align: left; }
+      .overview-stats { grid-template-columns: repeat(2,minmax(0,1fr)); }
+      .overview-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -397,6 +466,80 @@
     </section>
 
     <section id="workspaceMode" class="mode">
+      <div class="workspace-layout">
+        <aside id="workspaceSidebar" class="workspace-sidebar">
+          <div class="workspace-sidebar-title">Research workspace</div>
+          <nav class="workspace-nav" aria-label="Research run sections">
+            <button data-section="overview" class="active"><span class="nav-icon">▦</span><span class="nav-label">Overview</span><span class="nav-state" data-nav-state="overview">•</span></button>
+            <button data-section="guidance"><span class="nav-icon">◎</span><span class="nav-label">Known Games &amp; Guidance</span><span class="nav-state" data-nav-state="guidance">○</span></button>
+            <button data-section="universe"><span class="nav-icon">◉</span><span class="nav-label">Candidate Universe</span><span class="nav-state" data-nav-state="universe">○</span></button>
+            <button data-section="review"><span class="nav-icon">✓</span><span class="nav-label">Review Candidates</span><span class="nav-state" data-nav-state="review">○</span></button>
+            <button data-section="reports"><span class="nav-icon">▤</span><span class="nav-label">Reports</span><span class="nav-state" data-nav-state="reports">○</span></button>
+            <button data-section="activity"><span class="nav-icon">≡</span><span class="nav-label">Activity Log</span><span class="nav-state" data-nav-state="activity">•</span></button>
+          </nav>
+        </aside>
+        <div class="workspace-content">
+          <header class="workspace-topbar">
+            <div class="workspace-heading">
+              <div class="breadcrumb"><button id="breadcrumbRuns">Research Runs</button><span>›</span><span id="breadcrumbRun">No run loaded</span><span>›</span><strong id="breadcrumbSection">Overview</strong></div>
+              <div class="run-heading-row">
+                <div>
+                  <div class="toolbar"><button id="mobileNavToggle" class="btn btn-secondary mobile-nav-toggle" aria-label="Open navigation">☰</button><h1 id="loadedRunTitle">No run loaded</h1><span id="loadedRunStatusPill" class="pill">not loaded</span></div>
+                  <div id="loadedRunDetails" class="run-meta"></div>
+                </div>
+                <div class="recommended-action"><div class="recommended-copy"><span>Recommended action</span><strong id="headerRecommendation">Load a research run</strong></div><button id="headerPrimaryAction" class="btn btn-primary" disabled>Continue</button></div>
+              </div>
+            </div>
+            <div id="stepper" class="compact-progress"></div>
+          </header>
+
+          <section id="overviewPage" class="workspace-page active">
+            <div class="page-intro"><h2>Overview</h2><p class="status">Executive summary of this research run.</p></div>
+            <div id="overviewStats" class="overview-stats"></div>
+            <div class="overview-grid">
+              <div class="card"><h3>Current recommendation</h3><p id="overviewRecommendation">Load a run to see the recommended next action.</p><button id="overviewAction" class="btn btn-primary">Continue</button></div>
+              <div class="card"><h3>Recent reports</h3><ul id="overviewReports" class="report-list-compact"><li class="status">No reports generated.</li></ul></div>
+              <div class="card"><h3>Recent activity</h3><ul id="overviewActivity" class="activity-list"><li class="status">No activity loaded.</li></ul></div>
+              <div class="card"><h3>Run context</h3><div id="overviewContext" class="run-detail-grid"></div></div>
+            </div>
+          </section>
+
+          <section id="guidancePage" class="workspace-page">
+            <div class="page-intro"><h2>Known Games &amp; Guidance</h2><p class="status">Seeded games, research notes, known competitors, exclusions, benchmarks, and researcher guidance.</p></div>
+            <div id="guidancePanel" class="card"></div>
+          </section>
+
+          <section id="universePage" class="workspace-page">
+            <div class="page-intro"><h2>Candidate Universe</h2><p class="status">Discovery coverage, source breakdown, classification summaries, and pipeline controls.</p></div>
+            <div id="universeStats" class="overview-stats"></div>
+            <div id="universePanel" class="card section"></div>
+          </section>
+
+          <section id="reviewPage" class="workspace-page review-page">
+            <div class="page-intro"><h2>Review Candidates</h2><p class="status">Inspect, classify, and select the competitive set used in reports.</p></div>
+            <div class="review-toolbar">
+              <label class="search-control">Search<input id="candidateSearch" placeholder="Search title, developer, publisher, reason..." /></label>
+              <label>Sort<select id="candidateSort"><option value="final_rank">Final Rank</option><option value="title">Title</option><option value="review_count">Reviews</option><option value="fit_score">Fit</option><option value="comp_lane">Comp Lane</option><option value="classification">Classification</option><option value="confidence">Confidence</option><option value="publisher">Publisher</option><option value="developer">Developer</option><option value="included">Included</option></select></label>
+              <label>Direction<select id="candidateSortDirection"><option value="asc">Ascending</option><option value="desc">Descending</option></select></label>
+              <button id="btnConfirmReview" class="btn btn-primary">Confirm Comps</button>
+            </div>
+            <div class="bulk-actions"><strong>Bulk Actions:</strong><button id="btnBulkExcludeAaa" class="btn btn-secondary">Exclude AAA</button><button id="btnBulkExcludeClassics" class="btn btn-secondary">Exclude Classics</button><button id="btnBulkExcludeLowSignal" class="btn btn-secondary">Exclude Low Signal</button><button id="btnBulkIncludeIndie" class="btn btn-secondary">Include Indie Relevant</button></div>
+            <div class="filters" id="candidateFilters"><button data-filter="all" class="active">All</button><button data-filter="included">Included</button><button data-filter="not_included">Not Included</button><button data-filter="indie_relevant">Indie Relevant</button><button data-filter="aaa_or_major_publisher">AAA / Major</button><button data-filter="industry_classic">Classic</button><button data-filter="uncertain">Uncertain</button><button data-filter="low_signal">Low Signal</button></div>
+            <div class="table-wrap"><table><thead><tr><th class="table-col-details"></th><th class="table-col-included">Included?</th><th>Rank</th><th>Title</th><th class="table-col-developer">Developer</th><th class="table-col-publisher">Publisher</th><th>Reviews</th><th>Fit</th><th class="table-col-comp-lane">Comp Lane</th><th class="table-col-classification">Classification</th><th>Confidence</th><th class="table-col-aaa">AAA</th><th class="table-col-classic">Classic</th><th>Reason</th><th class="table-col-source">Source</th><th class="table-col-status">Status</th></tr></thead><tbody id="summaryTable"><tr><td colspan="16">No run loaded.</td></tr></tbody></table></div>
+          </section>
+
+          <section id="reportsPage" class="workspace-page"><div class="page-intro"><h2>Reports</h2><p class="status">Generate, preview, copy, and download research outputs.</p></div><div id="reportsActionPanel" class="card"></div><div id="reportsList" class="section">No reports loaded.</div></section>
+
+          <section id="activityPage" class="workspace-page"><div class="page-intro"><h2>Activity Log</h2><p class="status">Pipeline stages, backend jobs, timing, errors, warnings, and retry history.</p></div><div class="card"><div class="toolbar" style="justify-content:space-between"><h3>Backend run details</h3><button id="btnRefreshActivity" class="btn btn-secondary">Refresh</button></div><p><strong>Latest stage:</strong> <span id="progressStage">—</span> · <strong>Status:</strong> <span id="progressStatus">—</span></p><div id="runErrorBox" class="error-box hidden"></div><div id="runProgressTimeline" class="progress-timeline"></div><h3 style="margin-top:20px">Event history</h3><ul id="eventsList" class="activity-list"><li>No events loaded.</li></ul></div></section>
+
+          <p id="actionStatus" class="status" style="padding:0 28px 24px"></p>
+          <div id="activeStepPanel" class="hidden"></div><h2 id="activeStepTitle" class="hidden"></h2><p id="activeStepHelp" class="hidden"></p><span id="activeStepStatus" class="hidden"></span>
+        </div>
+      </div>
+      <div id="drawerBackdrop" class="drawer-backdrop"></div><aside id="candidateDrawer" class="candidate-drawer" aria-label="Candidate details"></aside>
+      <button id="btnShowBackendDetails" class="hidden"></button><button id="btnHideBackendDetails" class="hidden"></button><div id="runProgressPanel" class="hidden"></div>
+      <!-- Legacy workspace markup removed in favor of section-based pages. -->
+      <template id="legacyWorkspaceTemplate">
       <section class="loaded-run-card loaded-run">
         <div class="toolbar" style="justify-content:space-between;">
           <div>
@@ -521,6 +664,7 @@
         <summary>Advanced / Admin Actions</summary>
         <p class="status">The sequential stage controls above now replace the one-click pipeline path for normal use.</p>
       </details>
+      </template>
     </section>
   </main>
 
@@ -550,7 +694,7 @@
 
     const state = {
       organizations: [], games: [], runs: [], recentRows: [], currentRun: null, currentGame: null,
-      controls: [], candidates: [], reports: [], events: [], candidateFilter: 'all', candidateSearch: '', candidateSort: 'final_rank', candidateSortDirection: 'asc', editingControlId: null, activeStep: null, expandedCandidateId: null, pendingCandidateIds: new Set(), appAssets: {}, workspaceRefreshPending: false, actionInFlight: false,
+      controls: [], candidates: [], reports: [], events: [], candidateFilter: 'all', candidateSearch: '', candidateSort: 'final_rank', candidateSortDirection: 'asc', editingControlId: null, activeStep: null, activeSection: 'overview', expandedCandidateId: null, pendingCandidateIds: new Set(), appAssets: {}, workspaceRefreshPending: false, actionInFlight: false,
     };
 
     const workflowSteps = [
@@ -1139,6 +1283,7 @@
       workspaceMode.classList.toggle('active', mode === 'workspace');
       $('btnBackDashboard').classList.toggle('hidden', mode !== 'workspace');
       $('workspaceSelectorWrap').classList.toggle('hidden', mode === 'workspace');
+      document.body.classList.toggle('workspace-open', mode === 'workspace');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
@@ -1302,21 +1447,10 @@
       const org = state.organizations.find(item => item.id === run.organization_id) || {};
       const includedCount = state.candidates.filter(candidateIncluded).length;
       const directCount = state.candidates.filter(item => item.classification === 'direct_comp').length;
-      $('loadedRunDetails').innerHTML = `
-        <div class="loaded-run-meta">
-          <strong>Game:</strong> ${escapeHtml(game.title || 'Unknown game')} · <strong>Steam App ID:</strong> ${escapeHtml(game.steam_appid || '—')} ${game.steam_url ? `· <a href="${escapeHtml(game.steam_url)}" target="_blank" rel="noreferrer">Steam page</a>` : ''}
-          <br />
-          <strong>Workspace:</strong> ${escapeHtml(org.name || org.slug || run.organization_id || '—')} · <strong>Updated:</strong> ${escapeHtml(formatDate(run.updated_at || run.created_at))} · <strong>Run ID:</strong> ${escapeHtml(run.id || '—')}
-        </div>
-        <div class="loaded-run-stats">
-          <div class="stat-card"><strong>${state.candidates.length}</strong><span>Candidates</span></div>
-          <div class="stat-card"><strong>${includedCount}</strong><span>Included comps</span></div>
-          <div class="stat-card"><strong>${directCount}</strong><span>Direct comps</span></div>
-          <div class="stat-card"><strong>${state.controls.length}</strong><span>Guidance items</span></div>
-          <div class="stat-card"><strong>${state.reports.length}</strong><span>Reports</span></div>
-          <div class="stat-card"><strong>${escapeHtml(formatPillValue(run.current_stage || '—'))}</strong><span>Current stage</span></div>
-        </div>
-      `;
+      $('loadedRunDetails').innerHTML = `<span>Steam App ID <strong>${escapeHtml(game.steam_appid || '—')}</strong></span><span>Run ID <strong>${escapeHtml(run.id || '—')}</strong></span><span>Last updated <strong>${escapeHtml(formatDate(run.updated_at || run.created_at))}</strong></span>`;
+      $('breadcrumbRun').textContent = run.name || '(unnamed run)';
+      $('overviewStats').innerHTML = `<div class="stat-card"><strong>${state.candidates.length}</strong><span>Candidates</span></div><div class="stat-card"><strong>${includedCount}</strong><span>Included</span></div><div class="stat-card"><strong>${directCount}</strong><span>Direct</span></div><div class="stat-card"><strong>${state.controls.length}</strong><span>Guidance</span></div><div class="stat-card"><strong>${state.reports.length}</strong><span>Reports</span></div><div class="stat-card"><strong>${escapeHtml(formatPillValue(run.status || '—'))}</strong><span>Status</span></div>`;
+      $('overviewContext').innerHTML = `<div><strong>Game:</strong> ${escapeHtml(game.title || 'Unknown game')}</div><div><strong>Workspace:</strong> ${escapeHtml(org.name || org.slug || '—')}</div><div><strong>Current stage:</strong> ${escapeHtml(formatPillValue(run.current_stage || '—'))}</div>${game.steam_url ? `<div><a href="${escapeHtml(game.steam_url)}" target="_blank" rel="noreferrer">Open Steam page ↗</a></div>` : ''}`;
       $('progressStage').textContent = formatPillValue(run.current_stage || '—');
       $('progressStatus').textContent = formatPillValue(run.status || '—');
       if (run.status === 'failed' || run.failure_message) {
@@ -1333,6 +1467,40 @@
       renderControls();
       renderCandidateSummary();
       renderReports();
+      renderWorkspacePages();
+    }
+
+    const sectionLabels = { overview: 'Overview', guidance: 'Known Games & Guidance', universe: 'Candidate Universe', review: 'Review Candidates', reports: 'Reports', activity: 'Activity Log' };
+    function sectionForStep(stepKey) { return stepKey === 'setup' ? 'overview' : stepKey; }
+    function navigateWorkspace(section) {
+      state.activeSection = sectionLabels[section] ? section : 'overview';
+      document.querySelectorAll('.workspace-page').forEach(page => page.classList.toggle('active', page.id === `${state.activeSection}Page`));
+      document.querySelectorAll('.workspace-nav button').forEach(button => button.classList.toggle('active', button.dataset.section === state.activeSection));
+      $('breadcrumbSection').textContent = sectionLabels[state.activeSection];
+      $('workspaceSidebar').classList.remove('open');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    function renderWorkspacePages() {
+      const recommended = recommendedStepKey();
+      const action = stepActionConfig(recommended);
+      const recommendation = action?.message || activeStepHelp(recommended);
+      $('headerRecommendation').textContent = action?.label || sectionLabels[sectionForStep(recommended)];
+      $('headerPrimaryAction').textContent = action?.label || 'Open';
+      $('headerPrimaryAction').disabled = !!action?.disabled;
+      $('overviewRecommendation').textContent = recommendation;
+      $('overviewAction').textContent = `Open ${sectionLabels[sectionForStep(recommended)]}`;
+      $('overviewActivity').innerHTML = state.events.length ? state.events.slice(0, 5).map(event => `<li><strong>${escapeHtml(event.message || event.event_type || 'Activity')}</strong><br><span class="status">${escapeHtml(formatDate(event.created_at))}</span></li>`).join('') : '<li class="status">No activity recorded.</li>';
+      $('overviewReports').innerHTML = state.reports.length ? state.reports.slice(0, 4).map(report => `<li><button class="linkish overview-report" data-id="${escapeHtml(report.id)}">${escapeHtml(report.title || report.report_type)}</button><br><span class="status">${escapeHtml(formatDate(report.created_at))}</span></li>`).join('') : '<li class="status">No reports generated.</li>';
+      $('guidancePanel').innerHTML = activeStepHtml('guidance');
+      $('universePanel').innerHTML = activeStepHtml('universe');
+      $('reportsActionPanel').innerHTML = activeStepHtml('reports');
+      renderControls();
+      const sourceCounts = state.candidates.reduce((counts, item) => { const key = item.primary_source || 'unknown'; counts[key] = (counts[key] || 0) + 1; return counts; }, {});
+      const classified = state.candidates.filter(item => item.classification).length;
+      const sourceSummary = Object.entries(sourceCounts).sort((a,b) => b[1]-a[1]).slice(0,3);
+      $('universeStats').innerHTML = `<div class="stat-card"><strong>${state.candidates.length}</strong><span>Discovered</span></div><div class="stat-card"><strong>${classified}</strong><span>Classified</span></div><div class="stat-card"><strong>${state.candidates.filter(item => item.is_major_publisher).length}</strong><span>Major publishers</span></div>${sourceSummary.map(([source,count]) => `<div class="stat-card"><strong>${count}</strong><span>${escapeHtml(sourceLabels[source] || formatPillValue(source))}</span></div>`).join('')}`;
+      document.querySelectorAll('[data-nav-state]').forEach(marker => { const key = marker.dataset.navState; const step = workflowSteps.find(item => item.key === key); const complete = key === 'reports' ? reportsGenerated() : key === 'guidance' ? (guidanceSkipped() || state.controls.length) : key === 'universe' ? candidateUniverseBuilt() : key === 'review' ? candidateSetApproved() : false; marker.textContent = complete ? '✓' : (step && stepStatus(step) === 'ready' ? '•' : '○'); marker.classList.toggle('completed', !!complete); });
+      navigateWorkspace(state.activeSection);
     }
 
     function hasEvent(eventType) {
@@ -1410,7 +1578,6 @@
         const activeClass = step.key === state.activeStep ? ' active' : '';
         return `<div class="step ${status}${activeClass}" data-step="${escapeHtml(step.key)}"><strong>${index + 1}. ${escapeHtml(step.name)}</strong><span>${escapeHtml(formatPillValue(status))}${step.key === recommended ? ' · recommended' : ''}</span></div>`;
       }).join('');
-      renderActiveStepPanel();
     }
     function renderActiveStepPanel() {
       const step = workflowSteps.find(item => item.key === state.activeStep) || workflowSteps[0];
@@ -1647,7 +1814,7 @@
         state.expandedCandidateId = null;
       }
       $('summaryTable').innerHTML = rows.map(item => `
-        <tr class="${state.expandedCandidateId === item.candidate_id ? 'candidate-row-expanded' : ''}">
+        <tr class="${state.expandedCandidateId === item.candidate_id ? 'candidate-row-selected' : ''}">
           <td><button type="button" class="btn btn-ghost details-toggle" data-id="${escapeHtml(item.candidate_id)}" aria-expanded="${state.expandedCandidateId === item.candidate_id ? 'true' : 'false'}" aria-controls="candidate-details-${escapeHtml(item.candidate_id)}" aria-label="${state.expandedCandidateId === item.candidate_id ? 'Hide' : 'Show'} details for ${escapeHtml(item.title || 'candidate')}">${state.expandedCandidateId === item.candidate_id ? '⌄' : '▸'}</button></td>
           <td>${includeToggleHtml(item)}</td>
           <td>${escapeHtml(item.final_rank || '')}</td>
@@ -1665,8 +1832,21 @@
           <td class="candidate-col-source">${sourceBadge(item.primary_source)}</td>
           <td class="candidate-col-status">${statusBadge(item.pipeline_status)}</td>
         </tr>
-        ${state.expandedCandidateId === item.candidate_id ? candidateDetailsRow(item) : ''}
       `).join('');
+      renderCandidateDrawer();
+    }
+    function renderCandidateDrawer() {
+      const item = state.candidates.find(candidate => candidate.candidate_id === state.expandedCandidateId);
+      $('candidateDrawer').classList.toggle('open', !!item);
+      $('drawerBackdrop').classList.toggle('open', !!item);
+      if (!item) { $('candidateDrawer').innerHTML = ''; return; }
+      const template = document.createElement('template');
+      template.innerHTML = `<table>${candidateDetailsRow(item)}</table>`;
+      const card = template.content.querySelector('.candidate-detail-card');
+      if (!card) return;
+      const close = card.querySelector('.hide-details');
+      if (close) close.textContent = 'Close';
+      $('candidateDrawer').innerHTML = card.outerHTML;
     }
     function candidateDetailsRow(item) {
       return `
@@ -2048,8 +2228,42 @@
       if (!canInspectStep(step, status)) return;
       state.activeStep = step.key;
       renderStepper();
-      $('activeStepSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      navigateWorkspace(sectionForStep(step.key));
     });
+    document.querySelector('.workspace-nav').addEventListener('click', event => {
+      const button = event.target instanceof HTMLElement ? event.target.closest('button[data-section]') : null;
+      if (button) navigateWorkspace(button.dataset.section);
+    });
+    function handleWorkspaceAction(event) {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const stageAction = target.dataset.stageAction;
+      if (stageAction) runProcessStage(stageAction);
+      if (target.id === 'btnRunActiveStep') runActiveStepAction();
+      if (target.id === 'btnSaveControl') saveControl();
+      if (target.id === 'btnCancelEdit') resetControlForm();
+      if (target.id === 'btnSkipGuidance') skipGuidance();
+      if (target.id === 'btnViewReports') navigateWorkspace('reports');
+      const controlId = target.dataset.id;
+      if (controlId && target.classList.contains('edit-control')) editControl(controlId);
+      if (controlId && target.classList.contains('delete-control')) deleteControl(controlId);
+    }
+    $('guidancePanel').addEventListener('click', handleWorkspaceAction);
+    $('universePanel').addEventListener('click', handleWorkspaceAction);
+    $('reportsActionPanel').addEventListener('click', handleWorkspaceAction);
+    $('breadcrumbRuns').addEventListener('click', () => switchMode('dashboard'));
+    $('mobileNavToggle').addEventListener('click', () => $('workspaceSidebar').classList.toggle('open'));
+    $('overviewAction').addEventListener('click', () => navigateWorkspace(sectionForStep(recommendedStepKey())));
+    $('overviewReports').addEventListener('click', event => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !target.classList.contains('overview-report')) return;
+      navigateWorkspace('reports');
+      const toggle = reportsList.querySelector(`.toggle-report[data-id="${CSS.escape(target.dataset.id || '')}"]`);
+      if (toggle) toggle.click();
+    });
+    $('headerPrimaryAction').addEventListener('click', () => { const step = recommendedStepKey(); state.activeStep = step; navigateWorkspace(sectionForStep(step)); if (stepActionConfig(step) && !stepActionConfig(step).disabled) runActiveStepAction(); });
+    $('btnConfirmReview').addEventListener('click', confirmCompsForReport);
+    $('btnRefreshActivity').addEventListener('click', refreshWorkspaceData);
     $('candidateFilters').addEventListener('click', event => {
       const target = event.target;
       if (!(target instanceof HTMLElement) || !target.dataset.filter) return;
@@ -2104,6 +2318,21 @@
       if (target.classList.contains('candidate-classification-notes')) {
         updateClassificationNotes(candidateId, target.value);
       }
+    });
+    $('drawerBackdrop').addEventListener('click', () => { state.expandedCandidateId = null; renderCandidateSummary(); });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape' && state.expandedCandidateId) { state.expandedCandidateId = null; renderCandidateSummary(); } });
+    $('candidateDrawer').addEventListener('click', event => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const candidateId = target.dataset.id;
+      if (target.classList.contains('hide-details')) { state.expandedCandidateId = null; renderCandidateSummary(); }
+      if (candidateId && target.classList.contains('include-toggle')) toggleCandidateInclusion(candidateId);
+    });
+    $('candidateDrawer').addEventListener('change', event => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !target.dataset.id) return;
+      if (target.classList.contains('candidate-classification-override')) applyClassificationOverride(target.dataset.id, target.value);
+      if (target.classList.contains('candidate-classification-notes')) updateClassificationNotes(target.dataset.id, target.value);
     });
     reportsList.addEventListener('click', async event => {
       const target = event.target;
