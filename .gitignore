@@ -34,3 +34,7 @@ pnpm-debug.log*
 
 # Local Netlify folder
 .netlify
+
+# bytecode cache files generated automatically when Python runs
+__pycache__/
+*.py[cod]
