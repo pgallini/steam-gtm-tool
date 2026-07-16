@@ -669,8 +669,6 @@
   </main>
 
   <script>
-    const DEFAULT_ORG_ID = 'd76f2b86-7d52-40f7-9e2f-9f59f9d88d6c';
-    const DEFAULT_RUN_ID = 'd9c6c6f6-3a74-46f5-9019-40c0d8af5b8e';
     const controlLabels = {
       require_include: 'Required Include',
       must_consider: 'Must Consider',
@@ -1231,7 +1229,7 @@
       if (!resp.ok) throw new Error(typeof data === 'string' ? data : JSON.stringify(data));
       return data;
     }
-    function selectedOrgId() { return workspaceSelect.value || DEFAULT_ORG_ID; }
+    function selectedOrgId() { return workspaceSelect.value || state.organizations[0]?.id || ''; }
 
     function stepActionConfig(stepKey) {
       if (!state.currentRun || !state.currentGame) {
@@ -1291,12 +1289,11 @@
       try {
         state.organizations = await fetchJson('organizations');
       } catch (error) {
-        state.organizations = [{ id: DEFAULT_ORG_ID, name: 'Default Org' }];
-        globalStatus.textContent = `Could not load organizations: ${error.message}`;
+        state.organizations = [];
+        throw new Error(`Could not load organizations: ${error.message}`);
       }
-      if (!state.organizations.length) state.organizations = [{ id: DEFAULT_ORG_ID, name: 'Default Org' }];
+      if (!state.organizations.length) throw new Error('No organizations are configured in Supabase.');
       workspaceSelect.innerHTML = state.organizations.map(org => `<option value="${escapeHtml(org.id)}">${escapeHtml(org.name || org.slug || org.id)}</option>`).join('');
-      if (state.organizations.some(org => org.id === DEFAULT_ORG_ID)) workspaceSelect.value = DEFAULT_ORG_ID;
     }
 
     async function loadGames() {

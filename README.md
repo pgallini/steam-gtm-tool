@@ -1,8 +1,12 @@
 # steam-gtm-tool
 
-File-based pipeline logs are written under `logs/manual_steps/`.
+The deployable web application entry point is `ui.app:app`. Production deployment
+settings and required environment variables are documented in [DEPLOYMENT.md](DEPLOYMENT.md).
 
-Each file maps to one of the original manual script steps, for example:
+Pipeline logs are emitted as structured JSON to stdout/stderr so hosting platforms
+can collect them without persistent local disk.
+
+Step logger names map to the original manual script steps, for example:
 
 - `01_extract_seed_page_signals.log`
 - `02_discover_candidates.log`

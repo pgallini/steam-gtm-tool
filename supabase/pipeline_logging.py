@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 
@@ -30,29 +28,14 @@ def utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def log_root_dir() -> Path:
-    override = os.getenv('STEAM_GTM_LOG_DIR')
-    if override:
-        return Path(override)
-    return Path(__file__).resolve().parent.parent / 'logs' / 'manual_steps'
-
-
 def logger_for(step_key: str) -> logging.Logger:
     if step_key in _LOGGER_CACHE:
         return _LOGGER_CACHE[step_key]
 
-    log_dir = log_root_dir()
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_path = log_dir / STEP_LOG_FILES.get(step_key, f'{step_key}.log')
-
     logger = logging.getLogger(f'steam_gtm.manual_steps.{step_key}')
     logger.setLevel(logging.INFO)
-    logger.propagate = False
+    logger.propagate = True
     logger.handlers.clear()
-
-    handler = logging.FileHandler(log_path, encoding='utf-8')
-    handler.setFormatter(logging.Formatter('%(message)s'))
-    logger.addHandler(handler)
 
     _LOGGER_CACHE[step_key] = logger
     return logger
