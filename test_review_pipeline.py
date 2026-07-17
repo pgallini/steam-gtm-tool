@@ -4,7 +4,52 @@ import unittest
 from unittest.mock import patch
 
 from supabase.review_pipeline import load_candidate_reviews, upsert_reviews
-from supabase.research_pipeline import add_tag_discovery_results, persist_scoring_batches, selected_classification_rows
+from supabase.research_pipeline import add_tag_discovery_results, buildCandidateUniverse, persist_scoring_batches, selected_classification_rows
+
+
+class BuildCandidateUniverseTests(unittest.TestCase):
+    @patch('supabase.research_pipeline.addRunEvent')
+    @patch('supabase.research_pipeline.client')
+    @patch('supabase.research_pipeline.classify_run')
+    @patch('supabase.research_pipeline.score_run')
+    @patch('supabase.research_pipeline.enrich_run')
+    @patch('supabase.research_pipeline.prepareRunCandidates')
+    @patch('supabase.research_pipeline.candidateSetIsApproved', return_value=False)
+    def test_runs_candidate_stages_in_sequence(
+        self,
+        mock_approved,
+        mock_prepare,
+        mock_enrich,
+        mock_score,
+        mock_classify,
+        mock_client,
+        mock_add_event,
+    ) -> None:
+        calls = []
+        mock_prepare.side_effect = lambda run_id: calls.append(('prepare', run_id)) or {'count': 1}
+        mock_enrich.side_effect = lambda run_id: calls.append(('discover', run_id)) or {'enriched_app_count': 2, 'discovered_count': 2}
+        mock_score.side_effect = lambda run_id: calls.append(('filter', run_id)) or {'scored_count': 2}
+        mock_classify.side_effect = lambda rule_id, run_id: calls.append(('classify', rule_id, run_id)) or {'classified_count': 2}
+
+        result = buildCandidateUniverse('run-1')
+
+        self.assertEqual(
+            calls,
+            [
+                ('prepare', 'run-1'),
+                ('discover', 'run-1'),
+                ('filter', 'run-1'),
+                ('classify', 'rule_based_v1', 'run-1'),
+            ],
+        )
+        self.assertEqual(result['status'], 'needs_review')
+        mock_client.update.assert_called_once()
+        mock_add_event.assert_any_call(
+            'run-1',
+            'classification',
+            'candidate_universe_completed',
+            'Build Candidate Universe completed; candidates are ready for review',
+        )
 
 
 class UpsertReviewsTests(unittest.TestCase):

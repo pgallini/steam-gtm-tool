@@ -1242,6 +1242,13 @@
           disabled: false,
         };
       }
+      if (stepKey === 'universe') {
+        return {
+          label: candidateUniverseBuilt() ? 'Rebuild Candidate Universe' : 'Build Candidate Universe',
+          message: 'Runs discovery, filtering/scoring, and classification sequentially.',
+          disabled: state.actionInFlight,
+        };
+      }
       if (stepKey === 'review') {
         if (!candidateUniverseBuilt()) {
           return { label: 'Confirm Comps for Report', message: 'Build the candidate universe before confirming report comps.', disabled: true };
@@ -1272,6 +1279,7 @@
       const step = workflowSteps.find(item => item.key === state.activeStep);
       if (!step) return;
       if (step.key === 'guidance') return applyControls();
+      if (step.key === 'universe') return buildCandidateUniverse();
       if (step.key === 'review') return confirmCompsForReport();
       if (step.key === 'reports') return generateReports();
     }
@@ -1592,7 +1600,7 @@
     function activeStepHelp(stepKey) {
       if (stepKey === 'setup') return 'Confirm the game and run context before continuing.';
       if (stepKey === 'guidance') return 'Optionally add known games, exclusions, benchmarks, or skip this step.';
-      if (stepKey === 'universe') return 'Run the candidate universe subprocesses one at a time. Each step unlocks after the previous one completes.';
+      if (stepKey === 'universe') return 'Build the candidate universe in one action. Discovery, filtering/scoring, and classification run sequentially.';
       if (stepKey === 'review') return 'Sort, filter, inspect details, and choose which comps are included in reports.';
       if (stepKey === 'reports') return reportsGenerated() ? 'Reports are available. View, copy, or download final outputs below.' : 'Generate final reports after comps are confirmed.';
       return '';
@@ -1662,12 +1670,8 @@
       }
       if (stepKey === 'universe') {
         return `
-          <div class="step-action-stack">
-            ${universeStageCard('enrichment', 'Discover and Enrich Candidates', 'Uses the seed game signals and discovery strategy to find nearby Steam candidates and enrich their metadata.')}
-            ${universeStageCard('scoring', 'Filter, Score & Shortlist Candidates', 'Filters out non-fit candidates, scores the rest, and shortlists likely comps for review.')}
-            ${universeStageCard('classification', 'Classify Candidates', 'Assigns the comp bucket for each shortlisted candidate so the review step can begin.')}
-          </div>
-          <p class="status">Run the stages in order. Discovery/guidance must be applied or skipped before the next stage can start.</p>
+          ${actionBar}
+          <p class="status">This action discovers and enriches candidates, filters/scores/shortlists them, then classifies them for review.</p>
         `;
       }
       if (stepKey === 'review') {
@@ -2176,7 +2180,7 @@
     }
     async function runFullPipeline() {
       if (!state.currentRun) return;
-      $('actionStatus').textContent = 'Use the sequential stage controls to run the pipeline one step at a time.';
+      $('actionStatus').textContent = 'Use Build Candidate Universe to run discovery, filtering, and classification in sequence.';
     }
 
     $('btnStartNew').addEventListener('click', () => { $('newRunPanel').classList.remove('hidden'); $('newRunPanel').scrollIntoView({ behavior: 'smooth' }); });
