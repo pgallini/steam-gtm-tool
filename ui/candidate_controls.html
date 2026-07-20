@@ -189,7 +189,7 @@
     .step.completed { background: var(--success-soft); border-color: var(--success-border); }
     .step.running { background: var(--warn-soft); border-color: var(--warn-border); }
     .step.failed { background: var(--danger-soft); border-color: var(--danger-border); }
-    .step.skipped { background: var(--muted-surface); border-color: var(--border); }
+    .step.skipped { background: var(--success-soft); border-color: var(--success-border); }
     .step.active { outline: 0; background: var(--primary-soft); border-color: var(--primary); box-shadow: inset 0 0 0 1px rgba(90, 58, 136, 0.12); }
     .step { cursor: pointer; }
     .progress-timeline { display: grid; gap: 10px; margin-top: 12px; }
@@ -261,6 +261,7 @@
     body.workspace-open .page-shell { max-width: none; padding: 0; }
     .workspace-sidebar { position: sticky; top: 0; height: 100vh; padding: 24px 14px; border-right: 1px solid var(--border); background: var(--card); z-index: 4; }
     .workspace-sidebar-title { padding: 0 12px 14px; color: var(--subtle); font-size: 11px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+    .sidebar-back { width: 100%; justify-content: flex-start; margin-bottom: 14px; padding: 0 11px; border-color: var(--border); }
     .workspace-nav { display: grid; gap: 4px; }
     .workspace-nav button { width: 100%; justify-content: flex-start; min-height: 42px; padding: 0 11px; border: 0; border-radius: 9px; color: var(--muted); background: transparent; }
     .workspace-nav button:hover { color: var(--text); background: var(--muted-surface); }
@@ -286,7 +287,9 @@
     .compact-progress .step strong { font-size: 11px; white-space: nowrap; }
     .compact-progress .step span { display: none; }
     .compact-progress .step.completed { color: var(--success); border-color: var(--success); }
+    .compact-progress .step.skipped { color: var(--success); border-color: var(--success); }
     .compact-progress .step.active { color: var(--primary); border-color: var(--primary); background: transparent; }
+    .compact-progress .step.completed.active, .compact-progress .step.skipped.active { color: var(--success); border-color: var(--success); }
     .workspace-page { display: none; padding: 24px 28px 44px; }
     .workspace-page.active { display: block; }
     .page-intro { margin-bottom: 18px; }
@@ -323,7 +326,7 @@
       .workspace-layout { grid-template-columns: 76px minmax(0, 1fr); }
       .workspace-sidebar { padding-inline: 9px; }
       .workspace-sidebar-title, .nav-label, .nav-state { display: none; }
-      .workspace-nav button { justify-content: center; }
+      .workspace-nav button, .sidebar-back { justify-content: center; }
       .overview-stats { grid-template-columns: repeat(3, minmax(0,1fr)); }
     }
     @media (max-width: 560px) {
@@ -332,7 +335,7 @@
       .workspace-sidebar { display: none; position: fixed; width: 250px; }
       .workspace-sidebar.open { display: block; }
       .workspace-sidebar-title, .nav-label, .nav-state { display: block; }
-      .workspace-nav button { justify-content: flex-start; }
+      .workspace-nav button, .sidebar-back { justify-content: flex-start; }
       .mobile-nav-toggle { display: inline-flex; }
       .workspace-heading, .workspace-page { padding-left: 16px; padding-right: 16px; }
       .compact-progress { padding-left: 16px; padding-right: 16px; }
@@ -355,7 +358,6 @@
       </div>
     </div>
     <div class="masthead-actions">
-      <button id="btnBackDashboard" class="btn btn-secondary header-back hidden">← Back to Dashboard</button>
       <div id="workspaceSelectorWrap" class="workspace-control">
         <label for="workspaceSelect">Workspace</label>
         <select id="workspaceSelect"><option value="">Loading workspaces...</option></select>
@@ -469,6 +471,7 @@
       <div class="workspace-layout">
         <aside id="workspaceSidebar" class="workspace-sidebar">
           <div class="workspace-sidebar-title">Research workspace</div>
+          <button id="btnBackDashboard" class="btn btn-secondary sidebar-back" type="button" aria-label="Back to Dashboard" title="Back to Dashboard"><span class="nav-icon">←</span><span class="nav-label">Back to Dashboard</span></button>
           <nav class="workspace-nav" aria-label="Research run sections">
             <button data-section="overview" class="active"><span class="nav-icon">▦</span><span class="nav-label">Overview</span><span class="nav-state" data-nav-state="overview">•</span></button>
             <button data-section="guidance"><span class="nav-icon">◎</span><span class="nav-label">Known Games &amp; Guidance</span><span class="nav-state" data-nav-state="guidance">○</span></button>
@@ -513,6 +516,12 @@
             <div class="page-intro"><h2>Candidate Universe</h2><p class="status">Discovery coverage, source breakdown, classification summaries, and pipeline controls.</p></div>
             <div id="universeStats" class="overview-stats"></div>
             <div id="universePanel" class="card section"></div>
+            <div class="card section">
+              <div class="toolbar" style="justify-content:space-between"><div><h3>Backend run details</h3><p class="status">Live progress from discovery, enrichment, scoring, classification, and report processing.</p></div><button id="btnRefreshBackend" class="btn btn-secondary">Refresh</button></div>
+              <p><strong>Latest stage:</strong> <span id="progressStage">—</span> · <strong>Status:</strong> <span id="progressStatus">—</span></p>
+              <div id="runErrorBox" class="error-box hidden"></div>
+              <div id="runProgressTimeline" class="progress-timeline"></div>
+            </div>
           </section>
 
           <section id="reviewPage" class="workspace-page review-page">
@@ -530,7 +539,7 @@
 
           <section id="reportsPage" class="workspace-page"><div class="page-intro"><h2>Reports</h2><p class="status">Generate, preview, copy, and download research outputs.</p></div><div id="reportsActionPanel" class="card"></div><div id="reportsList" class="section">No reports loaded.</div></section>
 
-          <section id="activityPage" class="workspace-page"><div class="page-intro"><h2>Activity Log</h2><p class="status">Pipeline stages, backend jobs, timing, errors, warnings, and retry history.</p></div><div class="card"><div class="toolbar" style="justify-content:space-between"><h3>Backend run details</h3><button id="btnRefreshActivity" class="btn btn-secondary">Refresh</button></div><p><strong>Latest stage:</strong> <span id="progressStage">—</span> · <strong>Status:</strong> <span id="progressStatus">—</span></p><div id="runErrorBox" class="error-box hidden"></div><div id="runProgressTimeline" class="progress-timeline"></div><h3 style="margin-top:20px">Event history</h3><ul id="eventsList" class="activity-list"><li>No events loaded.</li></ul></div></section>
+          <section id="activityPage" class="workspace-page"><div class="page-intro"><h2>Activity Log</h2><p class="status">Timing, errors, warnings, retries, and other historical events for this run.</p></div><div class="card"><div class="toolbar" style="justify-content:space-between"><h3>Event history</h3><button id="btnRefreshActivity" class="btn btn-secondary">Refresh</button></div><ul id="eventsList" class="activity-list"><li>No events loaded.</li></ul></div></section>
 
           <p id="actionStatus" class="status" style="padding:0 28px 24px"></p>
           <div id="activeStepPanel" class="hidden"></div><h2 id="activeStepTitle" class="hidden"></h2><p id="activeStepHelp" class="hidden"></p><span id="activeStepStatus" class="hidden"></span>
@@ -1504,7 +1513,13 @@
       const classified = state.candidates.filter(item => item.classification).length;
       const sourceSummary = Object.entries(sourceCounts).sort((a,b) => b[1]-a[1]).slice(0,3);
       $('universeStats').innerHTML = `<div class="stat-card"><strong>${state.candidates.length}</strong><span>Discovered</span></div><div class="stat-card"><strong>${classified}</strong><span>Classified</span></div><div class="stat-card"><strong>${state.candidates.filter(item => item.is_major_publisher).length}</strong><span>Major publishers</span></div>${sourceSummary.map(([source,count]) => `<div class="stat-card"><strong>${count}</strong><span>${escapeHtml(sourceLabels[source] || formatPillValue(source))}</span></div>`).join('')}`;
-      document.querySelectorAll('[data-nav-state]').forEach(marker => { const key = marker.dataset.navState; const step = workflowSteps.find(item => item.key === key); const complete = key === 'reports' ? reportsGenerated() : key === 'guidance' ? (guidanceSkipped() || state.controls.length) : key === 'universe' ? candidateUniverseBuilt() : key === 'review' ? candidateSetApproved() : false; marker.textContent = complete ? '✓' : (step && stepStatus(step) === 'ready' ? '•' : '○'); marker.classList.toggle('completed', !!complete); });
+      document.querySelectorAll('[data-nav-state]').forEach(marker => {
+        const step = workflowSteps.find(item => item.key === marker.dataset.navState);
+        const status = step ? stepStatus(step) : null;
+        const done = status === 'completed' || status === 'skipped';
+        marker.textContent = done ? '✓' : (status === 'ready' || status === 'running' ? '•' : '○');
+        marker.classList.toggle('completed', done);
+      });
       navigateWorkspace(state.activeSection);
     }
 
@@ -1541,19 +1556,33 @@
     function reportsGenerated() {
       return state.reports.length > 0;
     }
-    function stepStatus(stepName) {
+    function latestReportTime() {
+      return Math.max(0, ...state.reports.map(report => new Date(report.created_at || 0).getTime() || 0));
+    }
+    function reportsReflectLatestCandidateSet() {
+      if (!reportsGenerated()) return false;
+      const changedAt = latestEventTime('candidate_set_changed_after_approval');
+      return changedAt === 0 || latestReportTime() > changedAt;
+    }
+    function stepStatus(step) {
       const run = state.currentRun || {};
-      if (run.status === 'failed' && stepName.stages.includes(run.current_stage)) return 'failed';
-      if (run.status === 'running' && stepName.stages.includes(run.current_stage)) return 'running';
-      if (stepName.name === 'Research Setup') return state.currentRun && state.currentGame ? 'completed' : 'ready';
-      if (stepName.name === 'Known Games & Guidance') {
-        if (state.controls.length > 0) return 'completed';
+      if (run.status === 'failed' && step.stages.includes(run.current_stage)) return 'failed';
+      if (run.status === 'running' && step.stages.includes(run.current_stage)) return 'running';
+      if (step.key === 'setup') return state.currentRun && state.currentGame ? 'completed' : 'ready';
+      if (step.key === 'guidance') {
+        if (state.controls.length > 0 || !!latestRunEvent('discovery', ['stage_completed'])) return 'completed';
         if (guidanceSkipped()) return 'skipped';
+        if (candidateUniverseBuilt() || candidateSetApproved() || reportsGenerated() || run.status === 'completed') return 'skipped';
         return 'ready';
       }
-      if (stepName.name === 'Build Candidate Universe') return candidateUniverseBuilt() ? 'completed' : 'ready';
-      if (stepName.name === 'Review, Sort, Filter & Exclude Comps') return candidateSetApproved() ? 'completed' : (candidateUniverseBuilt() ? 'ready' : 'not started');
-      if (stepName.name === 'Generate Reports') return reportsGenerated() ? 'completed' : (candidateSetApproved() ? 'ready' : 'not started');
+      if (step.key === 'universe') {
+        return candidateUniverseBuilt() || candidateSetApproved() || reportsGenerated() || run.status === 'completed' ? 'completed' : 'ready';
+      }
+      if (step.key === 'review') {
+        const completed = candidateSetApproved() || reportsReflectLatestCandidateSet() || (run.status === 'completed' && !candidateSetChangedAfterApproval());
+        return completed ? 'completed' : (candidateUniverseBuilt() ? 'ready' : 'not started');
+      }
+      if (step.key === 'reports') return reportsGenerated() ? 'completed' : (candidateSetApproved() ? 'ready' : 'not started');
       return 'ready';
     }
     function recommendedStepKey() {
@@ -2264,6 +2293,7 @@
     });
     $('headerPrimaryAction').addEventListener('click', () => { const step = recommendedStepKey(); state.activeStep = step; navigateWorkspace(sectionForStep(step)); if (stepActionConfig(step) && !stepActionConfig(step).disabled) runActiveStepAction(); });
     $('btnConfirmReview').addEventListener('click', confirmCompsForReport);
+    $('btnRefreshBackend').addEventListener('click', refreshWorkspaceData);
     $('btnRefreshActivity').addEventListener('click', refreshWorkspaceData);
     $('candidateFilters').addEventListener('click', event => {
       const target = event.target;
