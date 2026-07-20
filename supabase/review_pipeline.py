@@ -7,14 +7,15 @@ import threading
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Callable
 
 import requests
 from openai import OpenAI
 
 from .client import SupabaseClient
-from .research_run_service import addRunEvent, addRunProgressEvent, updateResearchRunStatus
+from .research_run_service import addRunEvent, addRunProgressEvent, recordOpenAIUsage, updateResearchRunStatus
 from .pipeline_logging import log_step, log_step_event
+from .openai_usage import response_token_usage
 
 
 client = SupabaseClient()
@@ -305,7 +306,13 @@ def review_quality_score(review: dict[str, Any]) -> float:
     return float(as_int(review.get('helpful_votes'))) + weighted_score + min(len(text) / 500.0, 2.0)
 
 
-def llm_build_candidate_insight(candidate: dict[str, Any], positives: list[str], negatives: list[str], model: str) -> dict[str, Any]:
+def llm_build_candidate_insight(
+    candidate: dict[str, Any],
+    positives: list[str],
+    negatives: list[str],
+    model: str,
+    usage_callback: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
     system_prompt = """
 You are a senior go-to-market strategist for PC/Steam games.
 
@@ -339,6 +346,14 @@ Be concise and specific.
             }
         },
     )
+    if usage_callback:
+        usage_callback(response_token_usage(
+            response,
+            model=model,
+            operation='Candidate review insight',
+            candidate_id=candidate.get('id'),
+            candidate_title=candidate.get('title'),
+        ))
     return json.loads(response.output_text)
 
 
@@ -378,7 +393,18 @@ def build_candidate_insight(candidate: dict[str, Any]) -> dict[str, Any] | None:
     model_version = 'rule_based'
     try:
         if llm_is_configured():
-            llm_output = llm_build_candidate_insight(candidate, positives, negatives, model)
+            llm_output = llm_build_candidate_insight(
+                candidate,
+                positives,
+                negatives,
+                model,
+                usage_callback=lambda usage: recordOpenAIUsage(
+                    candidate['run_id'],
+                    'review_analysis',
+                    f"OpenAI usage: review insight for {candidate.get('title')}",
+                    usage,
+                ),
+            )
             prompt_version = 'llm_review_insight_v1'
             model_version = model
     except Exception as exc:
@@ -452,7 +478,11 @@ def build_candidate_insight(candidate: dict[str, Any]) -> dict[str, Any] | None:
     return response[0] if isinstance(response, list) else response
 
 
-def llm_rollup_review_insights(insights: list[dict[str, Any]], model: str) -> dict[str, Any]:
+def llm_rollup_review_insights(
+    insights: list[dict[str, Any]],
+    model: str,
+    usage_callback: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
     system_prompt = """
 You are a senior go-to-market strategist for PC/Steam games.
 
@@ -488,6 +518,13 @@ Focus on common praise drivers, common risks/frictions, audience expectations, a
             }
         },
     )
+    if usage_callback:
+        usage_callback(response_token_usage(
+            response,
+            model=model,
+            operation='Review insight rollup',
+            insight_count=len(insights),
+        ))
     return json.loads(response.output_text)
 
 
@@ -502,7 +539,16 @@ def rollup_review_insights(run_id: str) -> dict[str, Any] | None:
     model_version = 'rule_based'
     try:
         if llm_is_configured():
-            llm_output = llm_rollup_review_insights(insights, model)
+            llm_output = llm_rollup_review_insights(
+                insights,
+                model,
+                usage_callback=lambda usage: recordOpenAIUsage(
+                    run_id,
+                    'review_analysis',
+                    'OpenAI usage: review insight rollup',
+                    usage,
+                ),
+            )
             prompt_version = 'llm_review_rollup_v1'
             model_version = model
     except Exception as exc:

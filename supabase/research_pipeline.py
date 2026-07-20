@@ -15,7 +15,8 @@ from openai import OpenAI
 
 from .client import SupabaseClient
 from .pipeline_logging import log_step, log_step_event
-from .research_run_service import addRunEvent, addRunProgressEvent, markCandidateSetChangedAfterApproval, prepareRunCandidates, updateResearchRunStatus
+from .openai_usage import response_token_usage
+from .research_run_service import addRunEvent, addRunProgressEvent, markCandidateSetChangedAfterApproval, prepareRunCandidates, recordOpenAIUsage, updateResearchRunStatus
 from .review_pipeline import runReviewPipeline
 from .comp_classification import classify_comp_metadata
 from .steam_store import fetch_app_details, fetch_page_signals, normalize_app_details
@@ -364,6 +365,7 @@ def get_llm_discovery_strategy(
     max_anchor_tags: int,
     max_supporting_tags: int,
     max_queries: int,
+    usage_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     if not llm_is_configured():
         return build_fallback_discovery_strategy(seed_tags, max_queries)
@@ -402,6 +404,8 @@ def get_llm_discovery_strategy(
             }
         },
     )
+    if usage_callback:
+        usage_callback(response_token_usage(response, model=model, operation='Discovery strategy'))
     strategy = parse_model_json(response.output_text, context='Discovery strategy')
     strategy['anchor_tags'] = (strategy.get('anchor_tags') or [])[:max_anchor_tags]
     strategy['supporting_tags'] = (strategy.get('supporting_tags') or [])[:max_supporting_tags]
@@ -785,6 +789,12 @@ def enrich_run(run_id: str) -> dict[str, Any]:
                 max_anchor_tags=max_anchor_tags,
                 max_supporting_tags=max_supporting_tags,
                 max_queries=max_search_queries,
+                usage_callback=lambda usage: recordOpenAIUsage(
+                    run_id,
+                    'discovery',
+                    'OpenAI usage: discovery strategy',
+                    usage,
+                ),
             )
         except Exception as exc:
             addRunEvent(run_id, 'discovery', 'llm_discovery_strategy_failed', 'OpenAI discovery strategy failed; falling back to seed tag order', {'error': str(exc)})
@@ -1383,6 +1393,7 @@ def llm_classify_rows(
     rows: list[dict[str, Any]],
     model: str,
     progress_callback: Callable[[int, int], None] | None = None,
+    usage_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, dict[str, Any]]:
     system_prompt = """
 You are a senior go-to-market strategist for PC/Steam games.
@@ -1423,6 +1434,13 @@ Keep reasoning concise and practical.
                 }
             },
         )
+        if usage_callback:
+            usage_callback(response_token_usage(
+                response,
+                model=model,
+                operation='Competitor classification',
+                candidate_count=len(batch_rows),
+            ))
         parsed = parse_model_json(response.output_text, context='Classification results')
         return {str(item['candidate_id']): item for item in parsed.get('candidates') or []}
 
@@ -1504,11 +1522,26 @@ def classify_run(rule_id: str, run_id: str) -> dict[str, Any]:
                     unit='games',
                     message='Classifying candidate batches with OpenAI',
                 ),
+                usage_callback=lambda usage: recordOpenAIUsage(
+                    run_id,
+                    'classification',
+                    'OpenAI usage: competitor classification',
+                    usage,
+                ),
             )
             missing_rows = [row for row in rows if str(row['candidate_id']) not in llm_results]
             for missing_row in missing_rows:
                 try:
-                    llm_results.update(llm_classify_rows([missing_row], model))
+                    llm_results.update(llm_classify_rows(
+                        [missing_row],
+                        model,
+                        usage_callback=lambda usage: recordOpenAIUsage(
+                            run_id,
+                            'classification',
+                            'OpenAI usage: competitor classification retry',
+                            {**usage, 'retry': True},
+                        ),
+                    ))
                 except Exception as retry_exc:
                     addRunEvent(
                         run_id,

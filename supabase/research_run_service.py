@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from .client import SupabaseClient
 from .steam_utils import canonical_steam_url, resolve_steam_appid
 
 client = SupabaseClient()
+logger = logging.getLogger(__name__)
 
 
 def listResearchRuns(game_id: str) -> list[dict[str, Any]]:
@@ -93,6 +95,14 @@ def addRunEvent(run_id: str, stage: str, event_type: str, message: str, details:
     }
     response = client.insert('run_events', payload, returning='representation')
     return response[0] if isinstance(response, list) else response
+
+
+def recordOpenAIUsage(run_id: str, stage: str, message: str, details: dict[str, Any]) -> None:
+    """Persist usage telemetry without turning a successful model response into a failed pipeline step."""
+    try:
+        addRunEvent(run_id, stage, 'llm_token_usage', message, details)
+    except Exception:
+        logger.exception('Could not persist OpenAI token usage run_id=%s stage=%s', run_id, stage)
 
 
 def addRunProgressEvent(

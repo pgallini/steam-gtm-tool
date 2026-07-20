@@ -298,6 +298,10 @@
     .overview-grid { display: grid; grid-template-columns: minmax(0,1.25fr) minmax(280px,.75fr); gap: 16px; margin-top: 16px; }
     .activity-list, .report-list-compact { list-style: none; padding: 0; margin: 12px 0 0; }
     .activity-list li, .report-list-compact li { padding: 10px 0; border-top: 1px solid var(--border); }
+    .llm-usage-grid { display: grid; grid-template-columns: repeat(4, minmax(110px, 1fr)); gap: 10px; margin-top: 14px; }
+    .llm-usage-table { margin-top: 16px; }
+    .llm-usage-table th, .llm-usage-table td { white-space: nowrap; }
+    .llm-usage-table th:first-child, .llm-usage-table td:first-child { width: 100%; white-space: normal; }
     .review-page { padding: 18px 20px 30px; }
     .review-toolbar { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-bottom: 10px; }
     .review-toolbar label { margin: 0; min-width: 145px; }
@@ -328,6 +332,7 @@
       .workspace-sidebar-title, .nav-label, .nav-state { display: none; }
       .workspace-nav button, .sidebar-back { justify-content: center; }
       .overview-stats { grid-template-columns: repeat(3, minmax(0,1fr)); }
+      .llm-usage-grid { grid-template-columns: repeat(2, minmax(110px, 1fr)); }
     }
     @media (max-width: 560px) {
       .loaded-run-stats { grid-template-columns: 1fr; }
@@ -539,7 +544,7 @@
 
           <section id="reportsPage" class="workspace-page"><div class="page-intro"><h2>Reports</h2><p class="status">Generate, preview, copy, and download research outputs.</p></div><div id="reportsActionPanel" class="card"></div><div id="reportsList" class="section">No reports loaded.</div></section>
 
-          <section id="activityPage" class="workspace-page"><div class="page-intro"><h2>Activity Log</h2><p class="status">Timing, errors, warnings, retries, and other historical events for this run.</p></div><div class="card"><div class="toolbar" style="justify-content:space-between"><h3>Event history</h3><button id="btnRefreshActivity" class="btn btn-secondary">Refresh</button></div><ul id="eventsList" class="activity-list"><li>No events loaded.</li></ul></div></section>
+          <section id="activityPage" class="workspace-page"><div class="page-intro"><h2>Activity Log</h2><p class="status">Timing, errors, warnings, retries, and other historical events for this run.</p></div><div id="llmUsageSummary" class="card"></div><div class="card section"><div class="toolbar" style="justify-content:space-between"><h3>Event history</h3><button id="btnRefreshActivity" class="btn btn-secondary">Refresh</button></div><ul id="eventsList" class="activity-list"><li>No events loaded.</li></ul></div></section>
 
           <p id="actionStatus" class="status" style="padding:0 28px 24px"></p>
           <div id="activeStepPanel" class="hidden"></div><h2 id="activeStepTitle" class="hidden"></h2><p id="activeStepHelp" class="hidden"></p><span id="activeStepStatus" class="hidden"></span>
@@ -701,7 +706,7 @@
 
     const state = {
       organizations: [], games: [], runs: [], recentRows: [], currentRun: null, currentGame: null,
-      controls: [], candidates: [], reports: [], events: [], candidateFilter: 'all', candidateSearch: '', candidateSort: 'final_rank', candidateSortDirection: 'asc', editingControlId: null, activeStep: null, activeSection: 'overview', expandedCandidateId: null, pendingCandidateIds: new Set(), appAssets: {}, workspaceRefreshPending: false, actionInFlight: false,
+      controls: [], candidates: [], reports: [], events: [], llmUsageEvents: [], candidateFilter: 'all', candidateSearch: '', candidateSort: 'final_rank', candidateSortDirection: 'asc', editingControlId: null, activeStep: null, activeSection: 'overview', expandedCandidateId: null, pendingCandidateIds: new Set(), appAssets: {}, workspaceRefreshPending: false, actionInFlight: false,
     };
 
     const workflowSteps = [
@@ -1432,11 +1437,12 @@
       state.workspaceRefreshPending = true;
       const runId = state.currentRun.id;
       try {
-        const [controls, candidates, reports, events, freshRun] = await Promise.all([
+        const [controls, candidates, reports, events, llmUsageEvents, freshRun] = await Promise.all([
           fetchJson('run_candidate_controls', `run_id=${encodeURIComponent(runId)}`).catch(() => []),
           fetchJson('v_run_candidate_summary', `run_id=${encodeURIComponent(runId)}`).catch(() => []),
           fetchJson('reports', `run_id=${encodeURIComponent(runId)}`).catch(() => []),
-          fetchJson('run_events', `run_id=${encodeURIComponent(runId)}`).catch(() => []),
+          fetchJson('run_events', `run_id=${encodeURIComponent(runId)}&limit=500`).catch(() => []),
+          fetchJson('run_events', `run_id=${encodeURIComponent(runId)}&event_type=llm_token_usage&limit=5000`).catch(() => []),
           fetchJson('research_runs', `id=${encodeURIComponent(runId)}`).catch(() => [state.currentRun]),
         ]);
         state.currentRun = Array.isArray(freshRun) && freshRun[0] ? freshRun[0] : state.currentRun;
@@ -1444,6 +1450,7 @@
         state.candidates = Array.isArray(candidates) ? candidates : [];
         state.reports = Array.isArray(reports) ? reports : [];
         state.events = Array.isArray(events) ? events : [];
+        state.llmUsageEvents = Array.isArray(llmUsageEvents) ? llmUsageEvents.filter(event => event.event_type === 'llm_token_usage' && event.details?.provider === 'openai' && event.details?.operation) : [];
         state.activeStep = recommendedStepKey();
         renderWorkspace();
       } finally {
@@ -1716,12 +1723,58 @@
       }
       return '';
     }
+    function tokenCount(value) {
+      return Number(value || 0).toLocaleString();
+    }
+    function renderLlmUsage() {
+      const container = $('llmUsageSummary');
+      if (!container) return;
+      const usageEvents = state.llmUsageEvents;
+      if (!usageEvents.length) {
+        container.innerHTML = '<h3>OpenAI usage</h3><p class="status">No recorded OpenAI token usage for this run. Usage is recorded for successful API calls made after this feature was enabled.</p>';
+        return;
+      }
+      const totals = usageEvents.reduce((sum, event) => {
+        const details = event.details || {};
+        if (details.usage_available === false) sum.unreported += 1;
+        sum.input += Number(details.input_tokens || 0);
+        sum.output += Number(details.output_tokens || 0);
+        sum.total += Number(details.total_tokens || 0);
+        sum.cached += Number(details.cached_input_tokens || 0);
+        sum.reasoning += Number(details.reasoning_tokens || 0);
+        return sum;
+      }, { input: 0, output: 0, total: 0, cached: 0, reasoning: 0, unreported: 0 });
+      const groups = new Map();
+      usageEvents.forEach(event => {
+        const details = event.details || {};
+        const operation = details.operation || 'OpenAI request';
+        const model = details.model || 'Unknown model';
+        const stage = event.stage || 'unknown';
+        const key = `${operation}\u0000${stage}\u0000${model}`;
+        const group = groups.get(key) || { operation, model, stage, calls: 0, input: 0, output: 0, total: 0 };
+        group.calls += 1;
+        group.input += Number(details.input_tokens || 0);
+        group.output += Number(details.output_tokens || 0);
+        group.total += Number(details.total_tokens || 0);
+        groups.set(key, group);
+      });
+      const rows = [...groups.values()].sort((a, b) => b.total - a.total).map(group => `<tr><td><strong>${escapeHtml(group.operation)}</strong><br><span class="status">${escapeHtml(formatPillValue(group.stage))} · ${escapeHtml(group.model)}</span></td><td>${tokenCount(group.calls)}</td><td>${tokenCount(group.input)}</td><td>${tokenCount(group.output)}</td><td>${tokenCount(group.total)}</td></tr>`).join('');
+      const detailNotes = [totals.cached ? `${tokenCount(totals.cached)} cached input tokens` : '', totals.reasoning ? `${tokenCount(totals.reasoning)} reasoning tokens` : '', totals.unreported ? `${tokenCount(totals.unreported)} calls did not return usage data` : ''].filter(Boolean).join(' · ');
+      container.innerHTML = `
+        <h3>OpenAI usage</h3>
+        <p class="status">Successful API calls recorded for this research run. Total tokens are input plus output tokens reported by OpenAI.</p>
+        <div class="llm-usage-grid"><div class="stat-card"><strong>${tokenCount(usageEvents.length)}</strong><span>API calls</span></div><div class="stat-card"><strong>${tokenCount(totals.input)}</strong><span>Input tokens</span></div><div class="stat-card"><strong>${tokenCount(totals.output)}</strong><span>Output tokens</span></div><div class="stat-card"><strong>${tokenCount(totals.total)}</strong><span>Total tokens</span></div></div>
+        ${detailNotes ? `<p class="status">${escapeHtml(detailNotes)}</p>` : ''}
+        <div class="table-wrap llm-usage-table"><table><thead><tr><th>Operation</th><th>Calls</th><th>Input</th><th>Output</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    }
     function renderEvents() {
-      if (!state.events.length) {
+      renderLlmUsage();
+      const historyEvents = state.events.filter(event => event.event_type !== 'llm_token_usage');
+      if (!historyEvents.length) {
         $('eventsList').innerHTML = '<li>No events yet.</li>';
         return;
       }
-      $('eventsList').innerHTML = state.events.slice(0, 10).map(event => `<li>${escapeHtml(formatDate(event.created_at))}: ${escapeHtml(event.message || event.event_type || 'Event')}</li>`).join('');
+      $('eventsList').innerHTML = historyEvents.slice(0, 10).map(event => `<li>${escapeHtml(formatDate(event.created_at))}: ${escapeHtml(event.message || event.event_type || 'Event')}</li>`).join('');
     }
     function renderControls() {
       if (!$('controlsTable')) return;

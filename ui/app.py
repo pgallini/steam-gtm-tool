@@ -176,6 +176,8 @@ def api_get(api_path: str):
         params = {"select": selects[api_path], "run_id": f"eq.{args['run_id']}", "order": "created_at.desc"}
         if api_path == "run_events":
             params["limit"] = args.get("limit", "20")
+            if args.get("event_type"):
+                params["event_type"] = f"eq.{args['event_type']}"
         return proxy_response(proxy_request("GET", api_path, params))
     return jsonify(error="Unknown API path"), 404
 
