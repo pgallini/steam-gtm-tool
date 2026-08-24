@@ -4,6 +4,7 @@ import json
 import os
 import time
 from typing import Any, Iterator
+from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
 import requests
 
@@ -17,7 +18,7 @@ class SteamRateLimitError(SteamCatalogError):
 
 
 class SteamCatalogClient:
-    BASE_URL = 'https://api.steampowered.com/IStoreService/GetAppList/v1/'
+    BASE_URL = 'https://partner.steam-api.com/IStoreService/GetAppList/v1/'
     USER_AGENT = 'steam-gtm-cache-sync/1.0'
 
     def __init__(self, api_key: str | None = None, timeout: int = 60, max_retries: int = 4):
@@ -87,22 +88,60 @@ class SteamCatalogClient:
                         raise SteamRateLimitError('Steam catalog rate limited after retries')
                     time.sleep(retry_after)
                     continue
+                if response.status_code >= 400:
+                    if attempt == self.max_retries:
+                        raise SteamCatalogError(self._format_http_failure(response))
+                    time.sleep(min(self._backoff_seconds(attempt), self.timeout))
+                    continue
                 response.raise_for_status()
                 payload = response.json()
                 return payload if isinstance(payload, dict) else {}
             except requests.exceptions.RequestException as exc:
                 last_exception = exc
-                if hasattr(exc, 'response') and exc.response is not None and exc.response.status_code == 429:
+                response = getattr(exc, 'response', None)
+                if response is not None and response.status_code == 429:
                     if attempt == self.max_retries:
                         raise SteamRateLimitError('Steam catalog rate limited after retries') from exc
-                    time.sleep(self._get_retry_after(exc.response, attempt))
+                    time.sleep(self._get_retry_after(response, attempt))
                     continue
                 if attempt == self.max_retries:
-                    raise SteamCatalogError('Steam catalog request failed') from exc
+                    raise SteamCatalogError(self._format_http_failure(response)) from exc
                 time.sleep(min(self._backoff_seconds(attempt), self.timeout))
             except ValueError as exc:
                 raise SteamCatalogError('Unable to parse Steam catalog response as JSON') from exc
         raise SteamCatalogError('Steam catalog request failed') from last_exception
+
+    def _format_http_failure(self, response: requests.Response | None) -> str:
+        status_code = getattr(response, 'status_code', 'unknown')
+        reason = getattr(response, 'reason', 'Unknown') or 'Unknown'
+        url = self._redact_api_key(getattr(response, 'url', None) or self.BASE_URL)
+        response_text = '' if response is None else getattr(response, 'text', '') or ''
+        snippet = response_text.strip()[:500]
+        details = f'HTTP {status_code} {reason}: {url}'
+        if snippet:
+            details = f'{details} | Response: {snippet}'
+        return f'Steam catalog request failed: {details}'
+
+    @staticmethod
+    def _redact_api_key(url: str) -> str:
+        try:
+            split_url = urlsplit(url)
+        except ValueError:
+            return url
+
+        params = parse_qsl(split_url.query, keep_blank_values=True)
+        if not params:
+            return url
+
+        sanitized_params = []
+        for key, value in params:
+            if key == 'key':
+                sanitized_params.append(f'{key}=[REDACTED]')
+            else:
+                sanitized_params.append(f'{key}={value}')
+
+        query = '&'.join(sanitized_params)
+        return urlunsplit((split_url.scheme, split_url.netloc, split_url.path, query, split_url.fragment))
 
     def _get_retry_after(self, response: requests.Response, attempt: int) -> float:
         header_value = response.headers.get('Retry-After')
