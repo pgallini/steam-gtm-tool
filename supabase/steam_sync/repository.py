@@ -82,13 +82,15 @@ class SteamSyncRepository:
     def get_sync_items(self, sync_run_id: str, statuses: list[str]) -> list[dict[str, Any]]:
         if not statuses:
             return []
-        status_filter = f'in.({','.join(statuses)})'
+        status_values = ','.join(statuses)
+        status_filter = f'in.({status_values})'
         return self.client.select('steam_sync_items', '*', {'sync_run_id': f'eq.{sync_run_id}', 'status': status_filter})
 
     def get_existing_appids(self, appids: list[int]) -> set[int]:
         if not appids:
             return set()
-        filter_value = f'in.({','.join(str(appid) for appid in appids)})'
+        appid_values = ','.join(str(appid) for appid in appids)
+        filter_value = f'in.({appid_values})'
         rows = self.client.select('steam_apps', 'appid', {'appid': filter_value})
         return {int(row['appid']) for row in rows if row.get('appid') is not None}
 
@@ -149,7 +151,8 @@ class SteamSyncRepository:
         active_ids = [row['id'] for row in active_runs if row.get('id')]
         if not active_ids:
             return []
-        filter_value = f'in.({','.join(active_ids)})'
+        active_id_values = ','.join(active_ids)
+        filter_value = f'in.({active_id_values})'
         candidates = self.client.select('run_candidates', 'steam_appid', {'steam_appid': 'not.is.null', 'run_id': filter_value})
         appids = {int(row['steam_appid']) for row in candidates if row.get('steam_appid') is not None}
         return sorted(appids)
